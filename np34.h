@@ -139,6 +139,8 @@ typedef struct {
   */
   const uint8_t *rom;
   const uint8_t *rom_ex;
+  const uint8_t *part;
+  const uint8_t *part_ex;
   /*
   bool *rom_exists;
   bool *rom_breakpoint;
@@ -896,6 +898,8 @@ static void (* const _op_fcn [64])(int) = {
 };
 
 static const uint8_t *_key_map=0;
+static uint8_t _is_spice=1;
+static uint8_t _is_programmable=0;
 
 
 static void sim_check_key(uint8_t key) {
@@ -906,7 +910,6 @@ static void sim_check_key(uint8_t key) {
 	}//if
 }
 
-static uint8_t _is_spice=1;
 #ifdef EMBEDDED
 static uint8_t sim_load_segments_woodstock(uint8_t digit) {
 	if (!(act_reg->flags & F_DISPLAY_ON)) return 0;
@@ -919,15 +922,64 @@ static uint8_t sim_load_segments_woodstock(uint8_t digit) {
 		segs = seg_map[act_reg->a[i]];
 		if (act_reg->b[i] & 0x01) segs |= CHAR_DOT;
 	}//else
+    need to squeeze 12 digits to 10 digits
+    . 1st digit negative sign use single led
+    . fix mode is ok as right most digit is not used
+    . scientific mode will loss 1 digit precision
+    . program mode (for programables) will have multi keys spaces taken away
     */
+     /*
+     A=0190f11f41ff10 
+     B=00000000000000
+     C=20200000000002
+     "01  14 11 09" 
+     "01 1411 09"
+     sci-9
+     A=00000929514130 
+     B=00002000000012
+     C=00002929514130
+     " 31415929 00" 
+     "3141592 00"
+     fix-9
+     A=fff02929514130
+     B=00000000000012
+     C=00002929514130
+     " 3141592920 " 
+     "3141592920"
+     message
+     A=fffffffffacaae
+     B=00000000000000
+     C=fff00000000000
+     "error       " 
+     "error     "
+     */
     if (digit == 10 && act_reg->a[13] == 9) return BIT7;
     //01234567890123
 	uint8_t segs=0, i=12-digit;
-    if ((act_reg->b[4] & 0x02) && digit >= 7) i--;
-    if (!_pgm_run) {
-        if (digit >= 8) i--;
-        if (digit <= 1) i++;
+    if ((act_reg->b[4] & 0x02)) {   // scientific or engineering mode
+        if (digit >= 7) i--;        // drop 1 digit precision to fit
     }//if
+    else {
+        //if ((!_pgm_run && _is_programmable)) {
+        if (_is_programmable && (!_pgm_run || (
+            //act_reg->s & (1<<15)
+            act_reg->flags & F_KEY
+            && act_reg->a[4] == 0x0f
+            && act_reg->a[7] == 0x0f
+            && act_reg->a[10] == 0x0f
+            && act_reg->a[11] == 0x0f
+            && act_reg->a[2] != 0x0f
+           ))) {
+            // programming mode or run / step key hold
+            // there should be a better way if i understand the registers better
+            if (digit >= 5) i--;
+            if (digit <= 1) i++;
+        }//if
+        // check for messages like "error"
+        //A=fffffffffacaae
+        if (act_reg->a[13] > 0x09 && act_reg->a[13] < 0x0f && digit <= 11)
+            i++;
+    }//else
     if (act_reg->b[i] & 0x02) {
         if (act_reg->a[i] == 9) segs = CHAR_MINUS;
     }//if
@@ -1100,10 +1152,25 @@ static bool woodstock_execute_cycle () {
 
 	act_reg->prev_pc = act_reg->pc;
 	uint16_t idx = act_reg->pc;
-	if (act_reg->flags&F_BANK) idx += 4096;
-	opcode = (act_reg->rom_ex[idx/4] >> ((idx%4)*2)) & 0x03;
-	opcode |= act_reg->rom[idx]<<2;
+    if (act_reg->part) {
+        if (idx < 0x400) {
+            opcode = (act_reg->part_ex[idx/4] >> ((idx%4)*2)) & 0x03;
+            opcode |= act_reg->part[idx]<<2;
+        }//if
+        else {
+            idx -= 0x400;
+            if (act_reg->flags&F_BANK) idx += 3072;
+            opcode = (act_reg->rom_ex[idx/4] >> ((idx%4)*2)) & 0x03;
+            opcode |= act_reg->rom[idx]<<2;
+        }//else
+    }//if
+    else {
+        if (act_reg->flags&F_BANK) idx += 4096;
+        opcode = (act_reg->rom_ex[idx/4] >> ((idx%4)*2)) & 0x03;
+        opcode |= act_reg->rom[idx]<<2;
+    }//else
 
+    vlog(" %03lx,%04lo:%04lo", act_reg->pc, act_reg->pc, opcode);
 	// a8d 1010 1000 1101 = 101 010 001 101 = 5215
 	// 0x74 0111 0100
 	// 15216, 15217=720 in original rom
@@ -1136,13 +1203,13 @@ static bool woodstock_execute_cycle () {
 	if (act_reg->ext_flag & (1<<5)) act_reg->s |= (1<<5);
 	act_reg->pc++;
 
-static void (* const _op_fcn_0100 [])(int) = {	op_set_s, op_test_s_eq_1, op_test_p_eq, op_del_sel_rom, };
-static void (* const _op_fcn_0300 [])(int) = {	op_clr_s, op_test_s_eq_0, op_test_p_ne, op_set_p, };
-static void (* const _op_fcn_02xx [])(int) = {	op_nop, op_load_constant, op_c_to_register, op_register_to_c, };     
-static void (* const _op_fcn_0200 [])(int) = {	
-	op_clear_reg, op_clear_s, op_display_toggle, op_display_off, op_mx, op_mx, op_mx, op_mx,
-	op_stack_to_a, op_down_rotate, op_y_to_a, op_c_to_stack, op_decimal, bad_op, op_f_to_a, op_f_exch_a,
-};
+    static void (* const _op_fcn_0100 [])(int) = {	op_set_s, op_test_s_eq_1, op_test_p_eq, op_del_sel_rom, };
+    static void (* const _op_fcn_0300 [])(int) = {	op_clr_s, op_test_s_eq_0, op_test_p_ne, op_set_p, };
+    static void (* const _op_fcn_02xx [])(int) = {	op_nop, op_load_constant, op_c_to_register, op_register_to_c, };     
+    static void (* const _op_fcn_0200 [])(int) = {	
+        op_clear_reg, op_clear_s, op_display_toggle, op_display_off, op_mx, op_mx, op_mx, op_mx,
+        op_stack_to_a, op_down_rotate, op_y_to_a, op_c_to_stack, op_decimal, bad_op, op_f_to_a, op_f_exch_a,
+    };
 
 	if (prev_inst_state == branch) vlog(" B%c", act_reg->flags & F_PREV_CARRY ? '-' : '+');
 
@@ -1180,7 +1247,7 @@ static void (* const _op_fcn_0200 [])(int) = {
 			if (!(act_reg->pc & 01777)) rom_selftest_done();
 			break;
 	}//switch
-  act_reg->prev_opcode = opcode;
+    act_reg->prev_opcode = opcode;
 
 	//act_reg->display_scan_fn ();
 #ifdef EMBEDDED
@@ -1260,8 +1327,11 @@ static void woodstock_clear_memory () {
 static void woodstock_set_rom(uint8_t which) {
 	_key_map = _rom[which].key_map;
     _is_spice = _rom[which].is_spice;
+    _is_programmable = *_rom[which].slide == 'P' ? 1 : 0;
     act_reg->rom = _rom[which].rom;
     act_reg->rom_ex = _rom[which].rom_ex;
+    act_reg->part = _rom[which].part;
+    act_reg->part_ex = _rom[which].part_ex;
     /*
 	switch (which) {
 		case 3:		// 38c

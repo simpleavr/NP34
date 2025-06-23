@@ -5,13 +5,13 @@ GCC_DIR=/usr/local/ti/msp430-gcc/bin
 SUPPORT_FILE_DIRECTORY = /usr/local/ti/msp430-gcc/include
 
 # Please set your device here
-DEVICE = msp430g2744
+DEVICE = msp430g2955
 CC = $(GCC_DIR)/msp430-elf-gcc
 GDB = $(GCC_DIR)/msp430-elf-gdb
 
 CFLAGS = -D EMBEDDED -I $(SUPPORT_FILE_DIRECTORY) -mmcu=$(DEVICE) -Os -g \
 -ffunction-sections -fdata-sections -fno-inline-small-functions \
--Wl,--relax -Wl,--gc-sections,--section-start=.rodata_prg38c=0x0fb00,--section-start=.rodata_prg34c=0x0fc00
+-Wl,--relax -Wl,--gc-sections,--section-start=.rodata_init=0x0fb00,--section-start=.rodata_factory=0x01040,--section-start=.rodata_greetings=0x01080
 
 LFLAGS = -L $(SUPPORT_FILE_DIRECTORY) -T $(DEVICE).ld 
 

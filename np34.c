@@ -5,9 +5,26 @@ nonpariel physical (NP) is an standalone calculator microcode emulator;
 
 Compile w/ (example only, substitute w/ your setup path)
 
-/msp430-gcc -Os -Wall -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,-Map=np25.map,--cref -Wl,--relax -Wl,--gc-sections -I /cygdrive/c/mspgcc-20120406-p20120502/bin/../msp430/include -mmcu=msp430g2553 -o np25.elf np25.c
+/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -I /usr/local/ti/msp430-gcc/include -mmcu=msp430g2744 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_prg38c=0x0fb00,--section-start=.rodata_prg34c=0x0fc00 -L /usr/local/ti/msp430-gcc/include -T msp430g2744.ld  np34.o -o np34.out
 
-Changes
+todo
+. on woodstocks, R/S display needs to be condensed, like in programming mode
+. PGM-PGM MEM-SAVE seems broken
+. PSE or R/S on fast mode does not work
+. provide setup option to allow for no timeout
+. woodstocks when showing error, the 1st 'e' got chopped off
+. woodstock save to flash, cannot be recalled, although ram was saved
+. for 31e (perhaps also others), quick CLR-CLR will freeze unit
+. instead of automatically do from_flash(), should have a key-sequence to re-load
+
+
+changes
+
+250623 add greetings / secret message
+250622 re-order buttons for power-up setup
+250620 timeout selectable, 2 min or 30 min
+       allow 1 more cycle for decimal point to increase brightness
+       postphone flash to ram loading to after 1st key hit upon startup
 250521 align timeout to 60 secs
 250522 'h' key toggles hint display, unit startup shows rom model
 250528 introduce full_hint() to show setup information
@@ -23,7 +40,7 @@ September 2021, cc
 . please observe same GPL licensing terms as the original Nonpariel package
 . notice from orignal Nonpareil package
 
-todo
+todo (done)
 . brightness control via + - keys
 . assign double press keys to save registers to flash
 
@@ -60,11 +77,11 @@ auto-sleep does not work for 37E and 38C ROM
 #include <stdlib.h>
 #include <string.h>
 
-//#ifdef EMBEDDED
 #ifdef EMBEDDED
 
-//#define G2955
-#define G2744
+//#define MEM_INIT
+#define G2955
+//#define G2744
 #define MHZ	8
 
 #include <msp430.h>
@@ -75,6 +92,11 @@ DCOCTL  = CALDCO_##x##MHZ;
 
 #define __use_cal_clk(x)	___use_cal_clk(x)
 //
+
+//#define DEBUG_STEP
+//#define KEYTEST
+//#define REGISTER_DUMP
+//#define MEMORY_DUMP
 
 static volatile uint16_t _ticks = 0;
 static volatile uint8_t _clicks = 0;
@@ -266,8 +288,8 @@ raw scancode on pcb version, code is digit * 4 + [123] for [XYZ]
    [0Y]  [2Y]   [bY]   [9Y] , 2,   10,46,38,
    scan lines X, Y, Z
 
-               22,
-   25,26,27,14,23,
+                 22,
+     25,26,27,14,23,
 	 29,30,31,15,13,
 	  33,  34,35,17,
 	    37,38,39,18,
@@ -299,13 +321,14 @@ keys layout
 
 */
 #define KEYR_ON				21
-#define KEYR_PGM_RUN	22
+#define KEYR_PGM_RUN	    22
 #define KEYR_F				14
 #define KEYR_G				23
 #define KEYR_H				13
 #define KEYR_CLR			17
 #define KEYR_PLUS			1
-#define KEYR_MINUS		37
+#define KEYR_MINUS		    37
+#define KEYR_RS	            42
 
 /*
 static const uint8_t key_map_34c[] = {
@@ -367,6 +390,11 @@ int log_on=1;
 void vlog(char *fmt, ...) {
 	va_list arg;
 
+	if (*fmt != '+') return;
+    static int threshold = 2000;
+    if (!threshold) return;
+    threshold--;
+	if (!(threshold%10)) fputs("\n", stderr);
 	if (*fmt == '+') log_on = 1;
 	if (*fmt == '-') log_on = 0;
 
@@ -417,175 +445,122 @@ void vlog_flag(int bits, uint16_t v) {
    ( 1,a3)    ( 2,a2)   ( 3,a1)    (19,a0)
    ( 5,73)    ( 6,72)   ( 7,71)    (41,70)
    ( 9,93)    (10,92)   (11,91)    (42,90)
-
-static const uint8_t key_map_25[] = {
-	0x00,0xa3,0xa2,0xa1,0x00, 0x73,0x72,0x71,0x00,0x93,
-	0x92,0x91,0x00,0x44,0xb0, 0x40,0x00,0xd4,0x60,0xa0,
-	0x00,0x00,0x00,0xb4,0x00, 0xb3,0xb2,0xb1,0x00,0x43,
-	0x42,0x41,0x00,0xd3,0xd1, 0xd0,0x00,0x63,0x62,0x61,
-	0x00,0x70,0x90,
-};
 */
-static const uint8_t key_map_34c[] = {
-	0x00,0x63,0x62,0x61,0x00, 0xd3,0xd2,0xd1,0x00,0x43,
-	0x42,0x41,0x00,0x90,0x31, 0x91,0x00,0x70,0xa0,0x60,
-	0x00,0x00,0x00,0x30,0x00, 0x34,0x33,0x32,0x00,0x94,
-	0x93,0x92,0x00,0x73,0x72, 0x71,0x00,0xa3,0xa2,0xa1,
-	0x00,0xd0,0x40,
+#ifdef G2955
+#endif
+static const uint8_t key_map_21[] = {
+	0x00, 0xa4, 0xa3, 0xa2, 0x00, 0x74, 0x73, 0x72, 0x00, 0x94, 
+	0x93, 0x92, 0x00, 0x40, 0xb1, 0x41, 0x00, 0xd0, 0x61, 0xa1, 
+	0x00, 0x00, 0x00, 0xb0, 0x00, 0xb4, 0xb3, 0xb2, 0x00, 0x44, 
+	0x43, 0x42, 0x00, 0xd4, 0xd2, 0xd1, 0x00, 0x64, 0x63, 0x62, 
+	0x00, 0x71, 0x91, 
 };
+
+static const uint8_t key_map_2x[] = {
+	0x00, 0xa3, 0xa2, 0xa1, 0x00, 0x73, 0x72, 0x71, 0x00, 0x93, 
+	0x92, 0x91, 0x00, 0x44, 0xb0, 0x40, 0x00, 0xd4, 0x60, 0xa0, 
+	0x00, 0x00, 0x00, 0xb4, 0x00, 0xb3, 0xb2, 0xb1, 0x00, 0x43, 
+	0x42, 0x41, 0x00, 0xd3, 0xd1, 0xd0, 0x00, 0x63, 0x62, 0x61, 
+	0x00, 0x70, 0x90, 
+};
+
+static const uint8_t key_map_3x[] = {
+	0x00, 0x63, 0x62, 0x61, 0x00, 0xd3, 0xd2, 0xd1, 0x00, 0x43, 
+	0x42, 0x41, 0x00, 0x90, 0x31, 0x91, 0x00, 0x70, 0xa0, 0x60, 
+	0x00, 0x00, 0x00, 0x30, 0x00, 0x34, 0x33, 0x32, 0x00, 0x94, 
+	0x93, 0x92, 0x00, 0x73, 0x72, 0x71, 0x00, 0xa3, 0xa2, 0xa1, 
+	0x00, 0xd0, 0x40, 
+};
+
+// virgin state signature, put it in 0xfc00, power on will check and initialize RAMS
+char __attribute__ ((section(".rodata_factory"))) factory[] = "FACTORY";
+char __attribute__ ((section(".rodata_greetings"))) greetings[] = "THANK?YOU?";
 
 //#define __USE_RAM	32		// our highest model 33c has 32 units
 #define __USE_RAM	64			// 34c now uses 64 units
 
-#include "rom_34c.h"
-#include "rom_37e.h"
-#include "rom_38c.h"
+#include "rom.h"
 
 struct ROM {
     const uint8_t *rom;
     const uint8_t *rom_ex;
+    const uint8_t *part;
+    const uint8_t *part_ex;
     const uint8_t *key_map;
-    char model[4];      // model number
-    char slide[7];      // slide switch labels
-    uint8_t msg_pos;    // seems like number of decimal places on startup
+    uint8_t flash;          // registers / program steps save to flash
+    char model[4];          // model number
+    char slide[7];          // slide switch labels
+    uint8_t use_ram;        // number of register memory
+    uint8_t msg_pos;        // seems like number of decimal places on startup
     uint8_t is_spice;
 };
 
-struct ROM _rom[] = {
-    // possible future inclusion of other models
-    //{ rom_25c, rom_25c_ex, key_map_25, "25C", 4, 0, },
-    //{ rom_33c, rom_33c_ex, key_map_34c, "33C", 4, 1, },
-    { rom_34c, rom_34c_ex, key_map_34c, "34C", "PGMRUN", 4, 1, },
-    { rom_37e, rom_37e_ex, key_map_34c, "37E", "BGNEND", 2, 1, },
-    { rom_38c, rom_38c_ex, key_map_34c, "38C", "DMYMDY", 2, 1, },
+/*    
+   rom, ram sizes
+   21   1   0
+   22   2   16
+   25c  2   16
+   27   3   16
+   29c  4   48
+   31e  2   -
+   32e  3.5 32
+   33c  4   32
+   34c  7   64
+   37e  2.5 48
+   38c  5   -
+*/
+const struct ROM _rom[] = {
+#ifdef G2955
+  { rom_21, rom_21_ex, 0, 0, key_map_21, 0, "21?", "DEGRAD", 0, 2, 0, },
+  { rom_22, rom_22_ex, 0, 0, key_map_2x, 0xf3, "22?", "BGNEND", 16, 2, 0, },
+  { rom_25, rom_25_ex, 0, 0, key_map_2x, 0xf4, "25?", "PGMRUN", 16, 2, 0, },
+  { rom_27, rom_27_ex, 0, 0, key_map_2x, 0xf5, "27?", "", 16, 2, 0, },
+  { rom_29c, rom_29c_ex, 0, 0, key_map_2x, 0xf6, "29C", "PGMRUN", 32, 2, 0, },
+  { rom_31e, rom_31e_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf7, "31E", "", 32, 4, 1, },
+  { rom_32e, rom_32e_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xf8, "32E", "", 32, 4, 1, },
+  { rom_33c, rom_33c_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf9, "33C", "PGMRUN", 32, 2, 1, },
+  { rom_34c, rom_34c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfa, "34C", "PGMRUN", 64, 4, 1, },
+  { rom_37e, rom_37e_ex, rom_1820_2122, rom_1820_2122_ex, key_map_3x, 0, "37E", "BGNEND", 0, 2, 1, },
+  { rom_38c, rom_38c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfc, "38C", "DMYMDY", 48, 2, 1, },
+#else
+  // include some of the above roms as G2774 won't fit all
+  { rom_33c, rom_33c_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf9, "33C", "PGMRUN", 32, 2, 1, },
+  { rom_34c, rom_34c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfa, "34C", "PGMRUN", 64, 4, 1, },
+  { rom_37e, rom_37e_ex, rom_1820_2122, rom_1820_2122_ex, key_map_3x, 0, "37E", "BGNEND", 0, 2, 1, },
+  { rom_38c, rom_38c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfc, "38C", "DMYMDY", 48, 2, 1, },
+#endif
 };
+
+
+#define NUM_ROMS  (sizeof(_rom) / sizeof(_rom[0]))
 //const uint8_t *_rom[] = { rom_33c, rom_34c, rom_37e, rom_38c, };
 //const uint8_t *_rom_ex[] = { rom_33c_ex, rom_34c_ex, rom_37e_ex, rom_38c_ex, };
 static volatile uint8_t _pgm_run=0;
 
 #include "np34.h"
 
-char __attribute__ ((section(".rodata_prg38c"))) prg38c[] = {		// use 0xfb00
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (00)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (01)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (02)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (03)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (04)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (05)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (06)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (07)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (08)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (09)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (10)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (11)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (12)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (13)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (14)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (15)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (16)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (17)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (18)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (19)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (20)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (21)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (22)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (23)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (24)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (25)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (26)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (27)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (28)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (29)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (30)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (31)
- /*
-                                           // */
-};
-
-char __attribute__ ((section(".rodata_prg34c"))) prg34c[] = {		// use 0xfc00
-//const char prg[] = {
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (00)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (01)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (02)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (03)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (04)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (05)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (06)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (07)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (08)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (09)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (10)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (11)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (12)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (13)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (14)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (15)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (16)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (17)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (18)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (19)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (20)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (21)
- 0xff, 0xea, 0x00, 0x62, 0xcf, 0xff, 0xeb, // (22)
- 0x6d, 0xdf, 0x2c, 0x38, 0xe0, 0x60, 0xcf, // (23)
- 0x01, 0x6d, 0xef, 0x6d, 0xef, 0xaf, 0x61, // (24)
- 0x6b, 0xbc, 0x62, 0xdf, 0x6e, 0xff, 0xe6, // (25)
- 0x8b, 0x0f, 0xff, 0x07, 0x0e, 0xe7, 0x0b, // (26)
- 0x54, 0x82, 0x06, 0x4b, 0x9f, 0x9f, 0x9f, // (27)
- 0xff, 0x08, 0x7a, 0xe8, 0xe9, 0x0b, 0x18, // (28)
- 0x81, 0x6d, 0x60, 0xcf, 0xbc, 0x8b, 0x61, // (29)
- 0x0a, 0x28, 0x54, 0x80, 0x09, 0x0f, 0xff, // (30)
- 0x16, 0x07, 0x04, 0x00, 0x00, 0x00, 0x00, // (31)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (32)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (33)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (34)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (35)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (36)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (37)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (38)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (39)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (40)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (41)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (42)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (43)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (44)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (45)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (46)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (47)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (48)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (49)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (50)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (51)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (52)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (53)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (54)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (55)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (56)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (57)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (58)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (59)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (60)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (61)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (62)
- 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // (63)
-};
-
 #ifdef EMBEDDED
 static volatile uint8_t _state=0;
 static volatile uint8_t _opt=0;
 static volatile uint8_t _key=0;
+static volatile uint8_t _blink=0;
 
-#define ST_RAM_LOADED 	BIT7
-#define ST_KEY_PRESSED	BIT6
-#define ST_KEY_RELEASED	BIT5
-#define ST_ALPHA_MSG		BIT4
-#define ST_HW_SLOW			BIT3
-#define ST_HW_TEST			BIT2
+#define ST_RAM_LOADED 	    BIT7
+#define ST_KEY_PRESSED	    BIT6
+#define ST_KEY_RELEASED	    BIT5
+#define ST_NOT_USED 		BIT4
+
+#define ST_ROM_BIT3			BIT3
+#define ST_ROM_BIT2			BIT2
 #define ST_ROM_BIT1			BIT1
 #define ST_ROM_BIT0  		BIT0
-#define ST_ROM				(ST_ROM_BIT1|ST_ROM_BIT0)
+#define ST_ROM				(BIT3|BIT2|BIT1|BIT0)
 
-#define OPT_HINT        BIT0
+#define OPT_WRITE_GREETINGS BIT4
+#define OPT_ALPHA_MSG     BIT3
+#define OPT_HW_SLOW       BIT2
+#define OPT_HW_TEST       BIT1
+#define OPT_LONG_TIMEOUT  BIT0
 
 
 /*
@@ -605,32 +580,56 @@ static volatile uint8_t _key=0;
 //________________________________________________________________________________
 void from_flash() {
 	uint8_t rom = _state&ST_ROM;
-	if (rom & 0x01) {
-		char *dest = (char*) act_reg->ram;
-		char *flash = (char*) (rom==1 ? prg34c : prg38c);
-		uint16_t i;
-		for (i=0;i<(__USE_RAM*7);i++) *dest++ = *flash++;
-	}//if
+    if (_rom[rom].flash) {
+        char *ram = (char*) act_reg->ram;
+        char *flash = (char *) ((uint16_t) _rom[rom].flash << 8);
+        uint16_t i;
+        for (i=0;i<(_rom[rom].use_ram*7);i++) *ram++ = *flash++;
+    }//if
 }
 //________________________________________________________________________________
 void to_flash() {
+    /*
+       f2 32, << f3->(ram+(32*7)), >> f2, >> f3 (from*)
+       f3 32, << f2->(..........), 
+       f4 64
+    */
 	uint8_t rom = _state&ST_ROM;
-	if (rom & 0x01) {
-		char *src = (char*) act_reg->ram;
-		char *flash = (char*) (rom==1 ? prg34c : prg38c);
-		FCTL2 = FWKEY+FSSEL0+FN2;
-		FCTL1 = FWKEY+ERASE;
-		FCTL3 = FWKEY;
-		*flash = 0;
+    if (_rom[rom].flash) {
+        char *ram = (char*) act_reg->ram;
+        char *flash = (char *) ((uint16_t) _rom[rom].flash << 8);
+        uint8_t use_ram = _rom[rom].use_ram;
+        uint16_t i;
+        if (use_ram <= 32) {
+            // half-segment used, read the other half before erasing whole segment,
+            // write back later
+            char *s = flash;
+            char *d = ram + (32*7);
+            if (_rom[rom].flash & 0x01) s -= 0x100;
+            else s += 0x100;
+            for (i=0;i<(32*7);i++) *d++ = *s++;
+        }//if
 
-		FCTL1 = FWKEY+WRT; 
+        FCTL2 = FWKEY+FSSEL0+FN2;
+        FCTL1 = FWKEY+ERASE;
+        FCTL3 = FWKEY;
+        *flash = 0;
 
-		uint16_t i;
-		for (i=0;i<(__USE_RAM*7);i++) *flash++ = *src++;
+        FCTL1 = FWKEY+WRT; 
 
-		FCTL1 = FWKEY;
-		FCTL3 = FWKEY+LOCK; 
-	}//if
+        for (i=0;i<(use_ram*7);i++) *flash++ = *ram++;
+
+        if (use_ram <= 32) {    // flash saved half segment
+            ram = (char*) act_reg->ram + (32*7);
+            flash = (char *) ((uint16_t) _rom[rom].flash << 8);
+            if (_rom[rom].flash & 0x01) flash -= 0x100;
+            else flash += 0x100;
+            for (i=0;i<(use_ram*7);i++) *flash++ = *ram++;
+        }//if
+
+        FCTL1 = FWKEY;
+        FCTL3 = FWKEY+LOCK; 
+    }//if
 }
 
 #define _MSG_POS	act_reg->f
@@ -649,6 +648,9 @@ pos 10 digit 0(x).......10(h)11(p)
 pos 2 digit 0(x)...9(h)10(p)11(-)
 */
 
+uint8_t hex(uint8_t v) {
+    return (v+ (v>=10 ? ('A'-10) : '0'));
+}
 
 //static const uint8_t *_msg_ptr = NULL;
 static char _msg_buf[11];
@@ -702,17 +704,17 @@ void sleep() {
 void full_hint() {
     // ..........
     // 34c SLOW H
-    strcpy(_msg_buf, _rom[_state&0x03].model);
-    _msg_buf[3] = '?';
-    if (_state&ST_HW_SLOW) {
-        strcpy(_msg_buf+4, "SLOW");
+    // FAST 2 34c
+    if (_opt&OPT_HW_SLOW) {
+        strcpy(_msg_buf, "SLOW");
     }//if
     else {
-        strcpy(_msg_buf+4, "FAST");
+        strcpy(_msg_buf, "FAST");
     }//else
-    _msg_buf[8] = '?';
-    _msg_buf[9] = _opt&OPT_HINT ? 'H' : '?';
-    _msg_buf[10] = '?';
+    _msg_buf[4] = '?';
+    _msg_buf[5] = _opt&OPT_LONG_TIMEOUT ? 'L' : '2';
+    _msg_buf[6] = '?';
+    strcpy(_msg_buf+7, _rom[_state&ST_ROM].model);
     /*
     _msg_buf[5] = '?';
     _msg_buf[6] = '0' + (_key/10);
@@ -722,18 +724,81 @@ void full_hint() {
 }
 
 void show_hint(const char *p) {
-    strcpy(_msg_buf, "???????");
-    _msg_buf[7] = *p++;
-    _msg_buf[8] = *p++;
-    _msg_buf[9] = *p++;
-    _state |= ST_ALPHA_MSG;
-    _clicks = 20;
+    if (*p) {
+        strcpy(_msg_buf, "???????");
+        _msg_buf[7] = *p++;
+        _msg_buf[8] = *p++;
+        _msg_buf[9] = *p++;
+        _opt |= OPT_ALPHA_MSG;
+        _clicks = 20;
+    }//if
 }
 
-#define TIMEOUT	(120*60/48)      // 250521 align timeout to 60 secs, now 120 secs
+void xfull_hint() {
+    // ..........
+    //    2 F 34c
+    //    L S 34c
+    show_hint(_rom[_state&ST_ROM].model);
+    _msg_buf[5] = _opt&OPT_HW_SLOW ? 'S' : 'F';
+    _msg_buf[3] = _opt&OPT_LONG_TIMEOUT ? 'L' : '2';
+}
+
+#define TIMEOUT	        (120*60/48)      // 250521 align timeout to 60 secs, now 120 secs
+#define TIMEOUT_LONG	(30l*60l*60l/48l)    // 30 minutes
 
 #else
-static volatile uint8_t _state=2;
+
+#define ST_ROM				0x0f
+static volatile uint8_t _state=0;
+
+void dump_regs() {
+    int i;
+    fputs("\n A=", stderr);
+    for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->a[i]&0x0f], stderr); }
+    fputs("\n B=", stderr);
+    for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->b[i]&0x0f], stderr); }
+    fputs("\n C=", stderr);
+    for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->c[i]&0x0f], stderr); }
+    fputs("\n Y=", stderr);
+    for (i=0;i<7;i++) { 
+        fputc("0123456789abcdef"[act_reg->y[i]>>4], stderr); 
+        fputc("0123456789abcdef"[act_reg->y[i]&0x0f], stderr); 
+    }
+    fputs("\n Z=", stderr);
+    for (i=0;i<7;i++) { 
+        fputc("0123456789abcdef"[act_reg->z[i]>>4], stderr); 
+        fputc("0123456789abcdef"[act_reg->z[i]&0x0f], stderr); 
+    }
+    fputs("\n T=", stderr);
+    for (i=0;i<7;i++) { 
+        fputc("0123456789abcdef"[act_reg->t[i]>>4], stderr); 
+        fputc("0123456789abcdef"[act_reg->t[i]&0x0f], stderr); 
+    }
+    fputs("\nM1=", stderr);
+    for (i=0;i<7;i++) { 
+        fputc("0123456789abcdef"[act_reg->m1[i]>>4], stderr); 
+        fputc("0123456789abcdef"[act_reg->m1[i]&0x0f], stderr); 
+    }
+    fputs("\nM2=", stderr);
+    for (i=0;i<7;i++) { 
+        fputc("0123456789abcdef"[act_reg->m2[i]>>4], stderr); 
+        fputc("0123456789abcdef"[act_reg->m2[i]&0x0f], stderr); 
+    }
+    fputs("\n f=", stderr);
+    vlog_flag(8, act_reg->f);
+    fputs("\n p=", stderr);
+    vlog_flag(8, act_reg->p);
+    fputs("\nflags=", stderr);
+    vlog_flag(8, act_reg->flags);
+    fputs("\next_flags=", stderr);
+    vlog_flag(16, act_reg->ext_flag);
+    fputs("\n s=", stderr);
+    vlog_flag(16, act_reg->s);
+    fprintf(stderr, "\npc=%04x", act_reg->pc);
+    fprintf(stderr, "\nsp=%04x", act_reg->sp);
+    fprintf(stderr, "\ndel_rom=%04x", act_reg->del_rom);
+    fputc('\n', stderr);
+}
 #endif
 //________________________________________________________________________________
 int main() {
@@ -761,24 +826,35 @@ int main() {
 
 	__bis_SR_register(GIE);
 
+    // check factory reset signature and store clean memory state for roms
+    char *p = factory;
+    if (*p == 'F' && *(p+1) == 'A') {
+        int i;
+        for (i=0;i<NUM_ROMS;i++) {
+            if (_rom[i].flash) {
+                _state &= ~ST_ROM;
+                _state |= i;
+                woodstock_set_rom(i);
+                woodstock_new_processor();
+                woodstock_clear_memory();
+                to_flash();
+            }//if
+            __delay_cycles(MHZ*125);
+        }//for
+        //___________ erase signature
+        char *flash = (char*) 0x1040;
+        FCTL1 = FWKEY + ERASE;
+        FCTL3 = FWKEY;
+        *flash = 0x00;
+        _state &= ~ST_ROM;
+    }//if
 
-
-//#define RAM_OFFSET	(7*9)
-//#define RAM_SIZE	(7*7)		// 49 program steps
-	woodstock_clear_memory();
-	from_flash();
-	_state = ST_HW_TEST + ST_ALPHA_MSG;		// enter setup, default to rom 0 (HP34C)
+	_opt = OPT_HW_TEST + OPT_ALPHA_MSG;		// enter setup, default to rom 0 (HP34C)
 	_key = KEYR_G;
-	//return 0;		//deb
-    strcpy(_msg_buf, "R?25_05_30");
-    _msg_buf[10] = '?';
-    //_state |= ST_ALPHA_MSG;
-    _clicks = 30;
-    //LPM0;
-    //uint8_t init = 1;
-	while (_state&ST_HW_TEST) {
-		//if (init) init = 0;
-        //else LPM0;
+    _state = 0;
+	while (_opt&OPT_HW_TEST) {
+        full_hint();
+        _opt |= OPT_ALPHA_MSG;
         LPM0;
 		switch (_key) {
             case KEYR_ON:			// auto-off
@@ -786,19 +862,17 @@ int main() {
                 //WDTCTL = 0;		// s/w reset when wakeup
                 _key = KEYR_PGM_RUN;
 			case KEYR_PGM_RUN: 	// pgm/run key
-				_state &= ~ST_HW_TEST; 
-				//to_flash();
+				_opt &= ~OPT_HW_TEST; 
 				break;
-			case KEYR_F:	// F key to rotate rom
-			    // 00..01, 01..10, 10..11, 11..01
+			case KEYR_G:	// G key to rotate rom
                 _state++;
-				if ((_state&ST_ROM)==0x03) _state &= ~ST_ROM;
+				if ((_state&ST_ROM)>=NUM_ROMS) _state &= ~ST_ROM;
 				break;
-			case KEYR_G:	// G key to toggle fast and slow cpu
-                _state ^= ST_HW_SLOW;
+			case KEYR_F:	// F key to toggle fast and slow cpu
+                _opt ^= OPT_HW_SLOW;
 				break;
 			case KEYR_H:	// H key to toggle hint
-                _opt ^= OPT_HINT;
+                _opt ^= OPT_LONG_TIMEOUT;
 				break;
             default:
 				break;
@@ -811,17 +885,17 @@ int main() {
 				_brightness &= 0x07;
 				break;
 		}//switch
-        full_hint();
-        _state |= ST_ALPHA_MSG;
 	}//while
-    _state &= ~ST_ALPHA_MSG;		// clear possible sticky message
+    _opt &= ~OPT_ALPHA_MSG;		// clear possible sticky message
 
 	woodstock_set_rom(_state&ST_ROM);
 	woodstock_new_processor();
-	from_flash();
+	//from_flash();
+
 	//_state &= ~(ST_RAM_LOADED|ST_KEY_PRESSED|ST_KEY_RELEASED);
 	woodstock_set_ext_flag (3, (_pgm_run=0));		// set run mode
-	act_reg->f = _rom[_state&ST_ROM].msg_pos;
+    if (_rom[_state&ST_ROM].msg_pos)
+        act_reg->f = _rom[_state&ST_ROM].msg_pos;
 #else
 
 	const char overlay[] = "\x1b[13;0H\x1b[32m\
@@ -897,8 +971,11 @@ const char keypad[] = "\x1b[2J\x1b[3;0H\
 
 	set_conio_terminal_mode(); 
 	woodstock_clear_memory();
-	woodstock_set_rom(_state&0x03);
+	woodstock_set_rom(_state&0x07);
 	woodstock_new_processor();
+	woodstock_set_ext_flag (3, (_pgm_run=0));		// set run mode
+    if (_rom[_state&ST_ROM].msg_pos)
+        act_reg->f = _rom[_state&ST_ROM].msg_pos;
 	uint8_t c=0;
 	uint8_t key_map[128];
 	for (uint8_t i=0;i<128;i++) key_map[i] = 0;
@@ -912,7 +989,7 @@ const char keypad[] = "\x1b[2J\x1b[3;0H\
 	key_map['*'] = 5; key_map['1'] = 6; key_map['2'] = 7; key_map['3'] = 41;
 	key_map['/'] = 9; key_map['0'] = 10; key_map['.'] = 11; key_map[0x0d] = 42;
 	key_map['E'] = 42;
-	uint8_t release_in=50;
+	uint8_t release_in=50;      // clear key press state in n cycles, impacts ROM initialization code
 
 	putstr(keypad);
 	putstr("\x1b[?25l");
@@ -932,51 +1009,81 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 
 	int play_pos=0;
 
-	if (!*play) {
+	if (0 && !*play) {
 		char *dest = (char*) act_reg->ram;
-		char *flash = (char*) prg34c;
+		char *flash = (char*) 0xfc00;
 		uint16_t i;
 		for (i=0;i<(__USE_RAM*7);i++) *dest++ = *flash++;
-		act_reg->f = _rom[_state&0x03].msg_pos;
+		act_reg->f = _rom[_state&0x0f].msg_pos;
 		woodstock_set_ext_flag (3, _pgm_run ^= 1);		// pgm-run toggle
 	}//if
 #endif
-	uint8_t done=0, initialized=0;
+	uint8_t done=0, initialized=0, warm_load=0;
 
 	while (!done) {
 #ifdef EMBEDDED
 		if (_state) {
 			if (_state & ST_KEY_PRESSED) {
-				/*
-				if (!(_state&ST_RAM_LOADED)) {
-					//______ lets load ram from flash (pretend continous memory) at 1st key
-					//       need to do it here after cpu initialized
-					if (_pgm_run && ((_state&ST_ROM) != 0x03)) {
-						_state |= ST_RAM_LOADED;
-						char *src = (char*) 0x1040;
-						uint8_t c = RAM_SIZE;
-						if (!(_state&ST_ROM_BIT0)) src += 0x40;		// next infomem block for hp25
-						while (c--) ((char*) act_reg->ram)[c+RAM_OFFSET] = *(src + c);
-					}//if
-				}//if
-				*/
 				//if (_key == (100+KEYR_CLR)) {		// double pressed clear, sleep
 				if (_key == KEYR_ON) {					// on key pressed, sleep
+                    show_hint("???");
+                    _opt |= OPT_ALPHA_MSG;
 					while (_key) __asm("  nop");
+                    show_hint(_rom[_state&ST_ROM].model);
 					_state &= ~ST_KEY_PRESSED;
 					sleep();
                     //uint8_t i;
                     //for (i=0;i<10;i++) _msg_buf[i] = '?';
-                    //_state |= ST_ALPHA_MSG;
-					_clicks = 5;
+                    //_opt |= OPT_ALPHA_MSG;
+					//_clicks = 5;
 					while (_clicks) {
 						if (_key == 10) {   // '0'
                             while (_key) __asm("  nop");
                             WDTCTL = 0;		// s/w reset when '0' pressed to wakeup
                         }//if
+#ifdef MEMORY_DUMP
+						if (_key == 11) {	// '.' debug, show ram values
+							_clicks = 0;
+                            char *p = (char *) 0xfce0;
+							for (;;) {
+								_state &= ~ST_KEY_PRESSED;
+                                _msg_buf[0] = hex((((uint16_t) p)&0xff)>>4);
+                                _msg_buf[1] = hex(((uint16_t) p)&0x0f);
+                                _msg_buf[2] = hex(*p>>4);
+                                _msg_buf[3] = hex(*p&0x0f);
+                                p++;
+                                _msg_buf[4] = hex(*p>>4);
+                                _msg_buf[5] = hex(*p&0x0f);
+                                p++;
+                                _msg_buf[6] = hex(*p>>4);
+                                _msg_buf[7] = hex(*p&0x0f);
+                                p++;
+                                _msg_buf[8] = hex(*p>>4);
+                                _msg_buf[9] = hex(*p&0x0f);
+                                p++;
+                                _opt |= OPT_ALPHA_MSG;
+								// wait for a key
+								while (!(_state & ST_KEY_PRESSED)) __asm(" nop");
+								switch (_key) {
+									case 11: p -= 8; break;	// .
+									case 42: break;		    // R/S
+									default: break;
+								}//switch
+                                if (_key == KEYR_PGM_RUN) break;
+							}//for
+							while (_key) __asm(" nop");
+                            _opt &= ~OPT_ALPHA_MSG;
+                        }//if
+#endif
+#ifdef REGISTER_DUMP
 						if (_key == 11) {	// '.' debug, show ram values
 							uint8_t i=0, j, s=0;
-							//uint8_t msg[] = "01__001122__33445566__";
+                            // 00-10-89-67-45-23-01
+                            //  bcd digits        a 89    674523 1   1-10(a) digits
+                            // 22.22222222 (....012022)(..22222202)  01.0 means exp 1
+                            // .2222222222 (....990922)(..22222202)  99.9 means exp -1
+                            //                  AA B            C is sign
+                            // AA exponent, B sign for exponent, exponent is 100-exp when negative
 							_clicks = 0;
 							for (;;) {
 								_state &= ~ST_KEY_PRESSED;
@@ -1014,7 +1121,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 								if (!s && v) _msg_buf[2] = 12 + '0';
 								//show_msg((const uint8_t *) (s ? msg+10 : msg), 0);
                                 //strcpy(_msg_buf, (char *) (s ? msg+10 : msg));
-                                _state |= ST_ALPHA_MSG;
+                                _opt |= OPT_ALPHA_MSG;
 								// wait for a key
 								while (!(_state & ST_KEY_PRESSED)) __asm(" nop");
 								switch (_key) {
@@ -1023,11 +1130,88 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 									case 42: i++; break;		// R/S
 									default: break;
 								}//switch
-								if (_key == 10) break;			// 0
+								//if (_key == 10) break;			// 0
+                                if (_key == KEYR_PGM_RUN) break;
 							}//for
 							while (_key) __asm(" nop");
-                            _state &= ~ST_ALPHA_MSG;
+                            _opt &= ~OPT_ALPHA_MSG;
 						}//if
+#endif
+/*
+                 22,
+     25,26,27,14,23,
+	 29,30,31,15,13,
+	  33,  34,35,17,
+	    37,38,39,18,
+	     1, 2, 3,19,
+	     5, 6, 7,41,
+	     9,10,11,42,
+*/
+						if (_key == 11) {	// '.' show greetings
+                            const char allow[] = "0?12ABC3DEF4GHI5JKL6MNO7PQRS8TUV9WXYZ:";
+							_clicks = 0;
+                            _state &= ~ST_KEY_PRESSED;
+                            _opt |= OPT_HW_TEST;
+                            char *p = greetings;
+                            uint8_t i=0;
+							for (i=0;i<10;i++) _msg_buf[i] = *p++;
+                            _blink = 0;
+                            while (1) {
+                                while (_key) __asm("  nop");
+                                _opt |= OPT_ALPHA_MSG;
+                                while (!_key) __asm("  nop");
+                                if (_key == KEYR_RS) {   // R/S
+                                    _blink++;
+                                }//if
+                                else {
+                                    if (_blink) {
+                                        switch (_key) {
+                                            case 10: i='0'; break;
+                                            case  6: i='1'; break;
+                                            case  7: i='2'; break;
+                                            case 41: i='3'; break;
+                                            case  2: i='4'; break;
+                                            case  3: i='5'; break;
+                                            case 19: i='6'; break;
+                                            case 38: i='7'; break;
+                                            case 39: i='8'; break;
+                                            case 18: i='9'; break;
+                                            default: _blink = 11; break;
+                                        }//switch
+                                        if (_blink < 11) {
+                                            const char *s0 = allow, *s1, *ss = allow;
+                                            while (*s0 != i) s0++;
+                                            s1 = s0;
+                                            i++;
+                                            while (*s1 != i) s1++;
+                                            while (*ss != _msg_buf[_blink-1]) ss++;
+                                            ss++;
+                                            if (ss < s0 || ss >= s1)
+                                                _msg_buf[_blink-1] = *s0;
+                                            else
+                                                _msg_buf[_blink-1] = *ss;
+                                        }//if
+                                    }//if
+                                    else break;
+                                }//else
+                                if (_blink >= 11) break;
+                            }//while
+                            if (_opt |= OPT_WRITE_GREETINGS) {
+                                FCTL2 = FWKEY+FSSEL0+FN2;
+                                FCTL1 = FWKEY+ERASE;
+                                FCTL3 = FWKEY;
+                                *greetings = 0;
+                                FCTL1 = FWKEY+WRT; 
+                                for (i=0;i<11;i++) greetings[i] = _msg_buf[i];
+                                FCTL1 = FWKEY;
+                                FCTL3 = FWKEY+LOCK; 
+                            }//if
+                            _opt &= ~(OPT_ALPHA_MSG|OPT_HW_TEST|OPT_WRITE_GREETINGS);
+                            _blink = 0;
+                            _key = KEYR_CLR;
+                            break;
+                        }//if
+#ifdef KEYTEST
 						if (_key == 42) {	// 'R/S'
 							_clicks = 0;
                             while (1) {
@@ -1035,63 +1219,41 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
                                 _msg_buf[0] = '0' + (_key/10);
                                 _msg_buf[1] = '0' + (_key%10);
                                 _msg_buf[2] = '_';
-                                uint8_t k34 = key_map_34c[_key];
+                                uint8_t k34 = key_map_3x[_key];
                                 _msg_buf[3] = '0' + (k34/16);
                                 _msg_buf[4] = '0' + (k34%16);
                                 _msg_buf[5] = '?';
-                                _state |= ST_ALPHA_MSG;
+                                _opt |= OPT_ALPHA_MSG;
 								while (!(_state & ST_KEY_PRESSED)) __asm(" nop");
                                 if (_key == KEYR_PGM_RUN) break;
                             }//while
 							while (_key) __asm(" nop");
-                            _state &= ~ST_ALPHA_MSG;
+                            _opt &= ~OPT_ALPHA_MSG;
                             continue;
                         }//if
+#endif
 					}//while
-                    //show_msg((const uint8_t*) "FLASH", 100);
-                    if (_opt&OPT_HINT) {
-                        show_hint(_rom[_state&0x03].model);
-                        _state |= ST_ALPHA_MSG;
-                        _clicks = 30;
-                    }//if
                     while (_clicks) __asm(" nop");
 					continue;
 				}//if
 				if (_key == (100+KEYR_PGM_RUN)) {		// double press pgm-run, save registers / program to flash
-				//if (_key == (100+KEYR_CLR)) {		// double pressed clear, sleep
 					to_flash();
-					_key -= 100;
-                    // show_msg((const uint8_t*) "?MEM?SAVED", 40); 
+					//_key -= 100;
+                    _state &= ~ST_KEY_PRESSED;
                     strcpy(_msg_buf, "?MEM?SAVED");
-                    _state |= ST_ALPHA_MSG;
+                    _opt |= OPT_ALPHA_MSG;
                     _clicks = 40;
+                    continue;
 				}//if
 				if (_key == KEYR_PGM_RUN) {
-					woodstock_set_ext_flag (3, _pgm_run ^= 1);		// pgm-run toggle
-                    if (initialized) {
-                        strcpy(_msg_buf, "???????");
-                        show_hint(_rom[_state&0x03].slide + _pgm_run*3);
-                        /*
-                        if (_pgm_run) {
-                            _msg_buf[7] = 'R';
-                            _msg_buf[8] = 'U';
-                            _msg_buf[9] = 'N';
-                        }//if
-                        else {
-                            _msg_buf[7] = 'P';
-                            _msg_buf[8] = 'G';
-                            _msg_buf[9] = 'M';
-                        }//else
-                        _state |= ST_ALPHA_MSG;
-                        _clicks = 30;
-                        */
-                    }//if
-					//___ to run mode, write flash, only save to flash when instructed
-					//if (_pgm_run) to_flash();
+                    if (*_rom[_state&ST_ROM].slide)
+                        woodstock_set_ext_flag (3, _pgm_run ^= 1);		// pgm-run toggle
+                    if (initialized) show_hint(_rom[_state&ST_ROM].slide + _pgm_run*3);
 				}//if
 				else {
 					//if (session_key_map[_key]) woodstock_press_key(session_key_map[_key]);
 					sim_check_key(_key);
+                    if (initialized == 1) warm_load = 100;
 				}//else
 				_state &= ~ST_KEY_PRESSED;
 			}//if
@@ -1100,8 +1262,31 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 				_state &= ~ST_KEY_RELEASED;
 			}//if
 		}//if
-        initialized = 1;
+        if (!initialized) initialized++;
 		if (!woodstock_execute_instruction()) break;
+        if (warm_load) {
+            if (warm_load == 1) {
+                from_flash();
+                initialized++;
+            }//if
+            warm_load--;
+        }//if
+#ifdef DEBUG_STEP
+        _msg_buf[0] = hex((act_reg->s>>12)&0x0f);
+        _msg_buf[1] = hex((act_reg->s>>8)&0x0f);
+        _msg_buf[2] = hex((act_reg->s>>4)&0x0f);
+        _msg_buf[3] = hex(act_reg->s&0x0f);
+        _msg_buf[4] = hex((act_reg->flags>>4)&0x0f);
+        _msg_buf[5] = hex(act_reg->flags&0x0f);
+        _msg_buf[6] = '?';
+        _msg_buf[7] = hex((act_reg->pc>>8)&0x0f);
+        _msg_buf[8] = hex((act_reg->pc>>4)&0x0f);
+        _msg_buf[9] = hex(act_reg->pc&0x0f);
+        _opt |= OPT_ALPHA_MSG;
+        while (!(_state & ST_KEY_PRESSED)) __asm("  nop");
+        woodstock_release_key();
+        _opt &= ~OPT_ALPHA_MSG;
+#endif
 #else
 
 		//if (kbhit()) {
@@ -1131,54 +1316,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 					//if (_pgm_run) flash_write(0xfc00, (char*)act_reg->ram, 7*__USE_RAM);
 					break;
 				case 'o':	// debug dump registers
-					{
-						int i;
-						fputs("\n A=", stderr);
-						for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->a[i]&0x0f], stderr); }
-						fputs("\n B=", stderr);
-						for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->b[i]&0x0f], stderr); }
-						fputs("\n C=", stderr);
-						for (i=0;i<14;i++) { fputc("0123456789abcdef"[act_reg->c[i]&0x0f], stderr); }
-						fputs("\n Y=", stderr);
-						for (i=0;i<7;i++) { 
-							fputc("0123456789abcdef"[act_reg->y[i]>>4], stderr); 
-							fputc("0123456789abcdef"[act_reg->y[i]&0x0f], stderr); 
-						}
-						fputs("\n Z=", stderr);
-						for (i=0;i<7;i++) { 
-							fputc("0123456789abcdef"[act_reg->z[i]>>4], stderr); 
-							fputc("0123456789abcdef"[act_reg->z[i]&0x0f], stderr); 
-						}
-						fputs("\n T=", stderr);
-						for (i=0;i<7;i++) { 
-							fputc("0123456789abcdef"[act_reg->t[i]>>4], stderr); 
-							fputc("0123456789abcdef"[act_reg->t[i]&0x0f], stderr); 
-						}
-						fputs("\nM1=", stderr);
-						for (i=0;i<7;i++) { 
-							fputc("0123456789abcdef"[act_reg->m1[i]>>4], stderr); 
-							fputc("0123456789abcdef"[act_reg->m1[i]&0x0f], stderr); 
-						}
-						fputs("\nM2=", stderr);
-						for (i=0;i<7;i++) { 
-							fputc("0123456789abcdef"[act_reg->m2[i]>>4], stderr); 
-							fputc("0123456789abcdef"[act_reg->m2[i]&0x0f], stderr); 
-						}
-						fputs("\n f=", stderr);
-						vlog_flag(8, act_reg->f);
-						fputs("\n p=", stderr);
-						vlog_flag(8, act_reg->p);
-						fputs("\nflags=", stderr);
-						vlog_flag(8, act_reg->flags);
-						fputs("\next_flags=", stderr);
-						vlog_flag(16, act_reg->ext_flag);
-						fputs("\n s=", stderr);
-						vlog_flag(16, act_reg->s);
-						fprintf(stderr, "\npc=%04x", act_reg->pc);
-						fprintf(stderr, "\nsp=%04x", act_reg->sp);
-						fprintf(stderr, "\ndel_rom=%04x", act_reg->del_rom);
-						fputc('\n', stderr);
-					}
+                    dump_regs();
 					break;
 				case 'p':	// debug dump ram
 					{
@@ -1203,7 +1341,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 #endif
 					if (key_map[c]) {
 						//woodstock_press_key(key_map[c]);
-						vlog("+[%c] %2d %02x", c, key_map[c], key_map_34c[key_map[c]]);
+						vlog("+[%c] %2d %02x", c, key_map[c], key_map_3x[key_map[c]]);
 						sim_check_key(key_map[c]);
 						release_in = 10;
 					}//if
@@ -1212,14 +1350,21 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 			c = 0;
 		}//if
 		if (!woodstock_execute_instruction()) break;
+        if (0&&!(act_reg->pc >= 0x1e2 && act_reg->pc <= 0x1f0)) {
+            vlog("+%03lx,", act_reg->pc);
+            dump_regs();
+        }//if
 		if (release_in) {
-			if (release_in == 1) woodstock_release_key();
+			if (release_in == 1) {
+                woodstock_release_key();
+                vlog("+[RELEASE_KEY]");
+            }//if
 			release_in--;
 		}//if
 #endif
 
 #ifdef EMBEDDED
-		if (_state&ST_HW_SLOW) __delay_cycles(MHZ*125);
+		if (_opt&OPT_HW_SLOW) __delay_cycles(MHZ*125);
 #else
 		//usleep(1000);
 #endif
@@ -1237,6 +1382,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 volatile uint8_t _data=0;
 volatile uint8_t _digit=0;
 volatile uint8_t _keyscan=0;
+volatile uint8_t _decimal_stay=0;
 
 //________________________________________________________________________________
 void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
@@ -1245,7 +1391,8 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 	P2OUT |= ALL_DIGITS_P2;
 	P3OUT = _data;
 
-	static uint8_t key_since=0;
+	//static uint8_t key_since=0;
+	static uint16_t key_since=0;
 	static uint8_t sav_i=0, sav_key=0;
 	if (_digit == 12) {		// key scanning cycle
 		uint8_t i;
@@ -1293,7 +1440,7 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 							_key = key;
 							//_key = _34_25map[key];
 						_state |= ST_KEY_PRESSED;
-						_state &= ~ST_ALPHA_MSG;		// clear possible sticky message
+						_opt &= ~OPT_ALPHA_MSG;		// clear possible sticky message
 						LPM0_EXIT;
 						sav_i = i;
 						key_since = 0;
@@ -1305,13 +1452,15 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 				P1OUT |= digit_map_p1[i];
 			}//for
 		}//else
-		if (key_since > TIMEOUT) {
+		//if (key_since > TIMEOUT) {
+		if (key_since > (_opt&OPT_LONG_TIMEOUT ? TIMEOUT_LONG : TIMEOUT)) {
 			//_key = 100+KEYR_CLR;			// auto-off
 			// check if cpu not active, waiting for key press and we can sleep (we only check 34C
-			if (_state & ST_HW_TEST || (_state & ST_ROM) != 1 || (act_reg->pc >= 0x430 && act_reg->pc <= 0x43c)) {
+            // fixme
+			if (_opt & OPT_HW_TEST || (_state & ST_ROM) != 1 || (act_reg->pc >= 0x430 && act_reg->pc <= 0x43c)) {
 				_key = KEYR_ON;			// auto-off
 				_state |= ST_KEY_PRESSED;
-                if (_state & ST_HW_TEST)
+                if (_opt & OPT_HW_TEST)
                     LPM0_EXIT;
                 else
                     key_since = 0;
@@ -1319,7 +1468,7 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 		}//if
 	}//if
 	else {
-		if (act_reg->flags&F_DISPLAY_ON || _state&(ST_ALPHA_MSG|ST_HW_TEST)) {
+		if (act_reg->flags&F_DISPLAY_ON || _opt&(OPT_ALPHA_MSG|OPT_HW_TEST)) {
 			P1OUT &= ~digit_map_p1[_digit];
 			P2OUT &= ~digit_map_p2[_digit];
 		}//if
@@ -1338,6 +1487,11 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 		TA0CCR0 += MHZ * segs * 50;
 	}//else
 
+    if (_decimal_stay) {
+        _decimal_stay--;
+        _data = SEG_H;
+        return;
+    }//if
 	//______ prepare for next digit
 	if (_digit>=12) {
 		_digit = 0;
@@ -1349,25 +1503,20 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 		if (_digit==12 && _keyscan++&0x03) _digit = 0;
 	}//else
 
-
-	//if (_key && !digit) _data = seg_map[_key/3];
-	//if (_key) _data = seg_map[0xe];
-
 	if (_digit == 12) {
 		_data = 0;		// key scan cycle, blank all segments
 	}//if
 	else {
-		if (_state&ST_ALPHA_MSG) {
-			//_data = _alpha_msg[_digit];
-			_data = char_at_digit(_digit);
+		//if (_opt&OPT_ALPHA_MSG) {
+		if (_opt&(OPT_ALPHA_MSG|OPT_HW_TEST)) {
+            if (_blink && _digit == (_blink-1) && (_ticks>>9)&0x01)
+                _data = 0;
+            else
+                _data = char_at_digit(_digit);
 		}//if
 		else {
-            /*
-			if (_state&ST_HW_TEST)
-				_data = hwtest_load_segments(_digit);
-			else
-            */
-				_data = sim_load_segments(_digit);
+            _data = sim_load_segments(_digit);
+            if (_data&SEG_H) _decimal_stay += 1;
 		}//else
 	}//else
 		
@@ -1377,7 +1526,7 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 		_clicks--;
 		//if (!_clicks) LPM0_EXIT;
 		if (!_clicks) {
-			_state &= ~ST_ALPHA_MSG;
+			_opt &= ~OPT_ALPHA_MSG;
 			LPM0_EXIT;
 		}//if
 	}//if
