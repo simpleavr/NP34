@@ -6,18 +6,18 @@ Nonpariel Physical (NP) is an standalone calculator microcode emulator
 
 Features
 _________________
-* selectable rom from HP-34C, HP-37E and HP-38C.
+* selectable rom from HP woodstock and spice series units. 21, 22, 25, 27, 29C, 31E, 32E, 33C, 34C, 37E, 38C
 * Setup is done by turning on the unit with [0] pressed, and use [f][g][h] to toggle options
 * [+][-] to adjust brightness, [PGM/RUN] exit setup
-* setup allows choice of ROM to use, set speed (fast / slow) and whether to show ROM model upon power on
-* 34C and 38C programs can be store in flash (press [PGM/RUN] key twice in quick succession) in their own spaces
+* setup allows choice of ROM to use, set speed (fast / slow) and sleep timeout of either 2 or 30 minutes
+* register contents / program steps can be store in flash (press [PGM/RUN] key twice in quick succession) in their own spaces
 
 Description
 ___________
 
 Compile w/ (example only, substitute w/ your setup path)
 
-/msp430-elf-gcc -D EMBEDDED -I /usr/local/ti/msp430-gcc/include -mmcu=msp430g2744 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_prg38c=0x0fb00,--section-start=.rodata_prg34c=0x0fc00 -L /usr/local/ti/msp430-gcc/include -T msp430g2744.ld  np34.o -o np34.out
+/msp430-elf-gcc -D EMBEDDED -I /usr/local/ti/msp430-gcc/include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x01040,--section-start=.rodata_greetings=0x1080 -L /usr/local/ti/msp430-gcc/include -T msp430g2955.ld  np34.o -o np34.out
 
 june 2025, cc
 * initial public release
@@ -66,7 +66,7 @@ _________
 
     * runs off 3V button cell
 
-          MSP430G2744
+          MSP430G2955
        -----------------    
       |                 |  
       |              RST|---[ 47k ]-----VCC  
