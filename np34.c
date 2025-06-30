@@ -512,10 +512,10 @@ struct ROM {
 const struct ROM _rom[] = {
 #ifdef G2955
   { rom_21, rom_21_ex, 0, 0, key_map_21, 0, "21?", "DEGRAD", 0, 2, 0, },
-  { rom_22, rom_22_ex, 0, 0, key_map_2x, 0xf3, "22?", "BGNEND", 16, 2, 0, },
-  { rom_25, rom_25_ex, 0, 0, key_map_2x, 0xf4, "25?", "PGMRUN", 16, 2, 0, },
-  { rom_27, rom_27_ex, 0, 0, key_map_2x, 0xf5, "27?", "", 16, 2, 0, },
-  { rom_29c, rom_29c_ex, 0, 0, key_map_2x, 0xf6, "29C", "PGMRUN", 32, 2, 0, },
+  { rom_22, rom_22_ex, 0, 0, key_map_2x, 0xf2, "22?", "BGNEND", 16, 2, 0, },
+  { rom_25, rom_25_ex, 0, 0, key_map_2x, 0xf3, "25?", "PGMRUN", 16, 2, 0, },
+  { rom_27, rom_27_ex, 0, 0, key_map_2x, 0xf6, "27?", "", 16, 2, 0, },
+  { rom_29c, rom_29c_ex, 0, 0, key_map_2x, 0xf4, "29C", "PGMRUN", 48, 2, 0, },
   { rom_31e, rom_31e_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf7, "31E", "", 32, 4, 1, },
   { rom_32e, rom_32e_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xf8, "32E", "", 32, 4, 1, },
   { rom_33c, rom_33c_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf9, "33C", "PGMRUN", 32, 2, 1, },
@@ -1239,11 +1239,11 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 				if (_key == (100+KEYR_PGM_RUN)) {		// double press pgm-run, save registers / program to flash
 					to_flash();
 					//_key -= 100;
-                    _state &= ~ST_KEY_PRESSED;
+                    //_state &= ~ST_KEY_PRESSED;
                     strcpy(_msg_buf, "?MEM?SAVED");
                     _opt |= OPT_ALPHA_MSG;
                     _clicks = 40;
-                    continue;
+                    //continue;
 				}//if
 				if (_key == KEYR_PGM_RUN) {
                     if (*_rom[_state&ST_ROM].slide)

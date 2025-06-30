@@ -9,8 +9,11 @@ _________________
 * selectable rom from HP woodstock and spice series units. 21, 22, 25, 27, 29C, 31E, 32E, 33C, 34C, 37E, 38C
 * Setup is done by turning on the unit with [0] pressed, and use [f][g][h] to toggle options
 * [+][-] to adjust brightness, [PGM/RUN] exit setup
-* setup allows choice of ROM to use, set speed (fast / slow) and sleep timeout of either 2 or 30 minutes
+* setup allows choice of ROM to use [g], set speed (fast / slow) [f] and sleep timeout of either 2 or 30 minutes [h]
+* secret message / greetings by turining on the unit with [.] pressed, [R/S] to start edit message, other keys to dismiss
 * register contents / program steps can be store in flash (press [PGM/RUN] key twice in quick succession) in their own spaces
+* each model has its own flash space for register / program retention (via double keying [PGRM/RUN])
+* all models share the same RAM space, switching between models are hard resets with RAM clearing
 
 Description
 ___________
@@ -44,21 +47,28 @@ MA 02111, USA.
 Parts list
 __________
 
-* msp430g2774
+* msp430g2955
 * 2x CL25011AH LED Module
 * 32× SMT Tactile Button 6x3mm
 * 1x CR2032 SMD/TH battery holder
 * 1x 47k resistor
-* 1x 100nF (104) capacitor
+* 1x 100nF (104) capacitor (optional)
 
 _________________
 
 * [0]+[ON] enter setup
-* [F] cycles 34C/37E/38C emulation
-* [G] toggles slow/fast cpu
-* [H] toggles whether to show rom model when turned on
+* [G] cycles 21/22/25/27/29C/31E/32E/33C/34C/37E/38C emulation
+* [F] toggles slow/fast cpu
+* [H] toggles 2 minutes or 30 minutes sleep time
 * [+][-] adjust brightness
 * [PGM/RUN] exit setup
+
+_________________
+
+* [.]+[ON] enter secret message / greeting
+* [R/S] starts editing and advances digit position
+* [0]..[9] to enter digits and letters like telephone keypad
+* any other key dismiss greeting mode
 
 Schematic
 _________
