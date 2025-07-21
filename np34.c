@@ -1,48 +1,145 @@
 /*
 
-Chris Chung August 2021, simpleavr@gmail.com
-nonpariel physical (NP) is an standalone calculator microcode emulator;
+Chris Chung August 2021,2025 simpleavr@gmail.com
+nonpareil physical (NP) is an standalone calculator microcode emulator;
 
-Compile w/ (example only, substitute w/ your setup path)
+## NP-34 Calculator Emulator
+Nonpareil Physical (NP) is an standalone calculator microcode emulator
 
-/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -I /usr/local/ti/msp430-gcc/include -mmcu=msp430g2744 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_prg38c=0x0fb00,--section-start=.rodata_prg34c=0x0fc00 -L /usr/local/ti/msp430-gcc/include -T msp430g2744.ld  np34.o -o np34.out
+### Features
+* selectable rom from HP woodstock and spice series units. 21, 22, 25, 27, 29C, 31E, 32E, 33C, 34C, 37E, 38C
+* Setup is done by turning on the unit with [0] pressed, and use [f][g][h] to toggle options
+* [+][-] to adjust brightness, [PGM/RUN] exit setup
+* setup allows choice of ROM to use [g], set speed (fast / slow) [f] and sleep timeout of either 2 or 30 minutes [h]
+* secret message / greetings by turining on the unit with [.] pressed, [R/S] to start edit message, other keys to dismiss
+* register contents / program steps can be store in flash (press [PGM/RUN] key twice in quick succession) in their own spaces
+* each model has its own flash space for register / program retention (via double keying [PGRM/RUN])
+* all models share the same RAM space, switching between models are hard resets with RAM clearing
 
-todo
-. on woodstocks, R/S display needs to be condensed, like in programming mode
-. PGM-PGM MEM-SAVE seems broken
-. PSE or R/S on fast mode does not work
-. provide setup option to allow for no timeout
-. woodstocks when showing error, the 1st 'e' got chopped off
-. woodstock save to flash, cannot be recalled, although ram was saved
-. for 31e (perhaps also others), quick CLR-CLR will freeze unit
-. instead of automatically do from_flash(), should have a key-sequence to re-load
+**Setup**
+* [0]+[ON] enter **setup**
+* [G] cycles 21/22/25/27/29C/31E/32E/33C/34C/37E/38C emulation
+* [F] toggles slow/fast cpu
+* [H] toggles 2 minutes or 30 minutes sleep time
+* [+][-] adjust brightness
+* [PGM/RUN] exit setup
+* [.]+[ON] enter **secret message / greeting**
+* [R/S] starts editing and advances digit position
+* [0]..[9] to enter digits and letters like telephone keypad
+* any other key dismiss greeting mode
+
+**Compile w/ (example only, substitute w/ your setup path)**
+
+`/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
+
+### Changes included in firmware 00
+**250714** add 2 digit firmware version _ver
+**250623** add greetings / secret message
+**250622** re-order buttons for power-up setup
+**250620** timeout selectable, 2 min or 30 min, allow 1 more cycle for decimal point to increase brightness, postphone flash to ram loading to after 1st key hit upon startup
+**250521** align timeout to 60 secs
+**250522** 'h' key toggles hint display, unit startup shows rom model
+**250528** introduce full_hint() to show setup information
+**250601** show_hint() for briefly showing rom model and slide switch change
+**250603** timeout now about 120 secs
+
+### September 2021, orginal notes
+* based on TI msp430g2744 mcu, 32kB flash, 1kB ram, replaced w/ g2955 in 2025
+* based on work from Eric Smith's nonpareil
+* emualtes spice core
+* this is a hobby project not suitable for any use.
+* please observe same GPL licensing terms as the original Nonpareil package
+* notice from orignal Nonpareil package
+
+### Firmware updates
+* an IO header block on the top left of the NP-34 unit facilitates firmware updates
+* firmware flashing can be done via SBW (Spy-By-Wire) or BSL (BootStrap Loader) mechanisms
+* SBW requires more expensive hardware (TI LaunchPads), is quicker and more secure
+* BSL requires less expensive headware (USB-TTL dongles), is slower and less secure
+
+```
+  +---------------------------+
+  |  ...Display.............  |  
+  |                           |  the 2x4 header pins on the right size of the unit
+  |    o o R  /      \        |  is for firmware flashing and I/O purpose
+  |    o o T | CR2032 |       |  left column 4 pins are Rx, Tx (IO) and Rx, Tx (BSL)
+  | Rx o o +  \      /        |  the IO receive and transmit pins are for future development
+  | Tx o o G                  |  the BSL Rx and Tx pins are needed for BSL firmware flashing
+  |                           |  right column 4 pins are (R)eset, (T)est, (+)power and (G)round
+  |                           |  these pins are needed for both BSL and SBW programming
+
+```
+
+* each firmware release contains 4 files, example for version 00
+  `ex. np34-00.hex (for SBW), np34-00.txt, PASS-00.txt and np34-00np.txt (for BSL)`
+* firmware files reside in **firmware** folder in source tree
+
+**Firmware flashing procedure using TI LaunchPad**
+* you can use a Texas Instructment LaunchPad development board to flash firmware via the SBW (Spy-By-Wire) protocol
+* most LaunchPads should be able to flash the NP-34, except for the low end MSP430G2ET, tested OK LaunchPads include FR2433 and FR5529
+* connection is done through 4 dupont wires with optional pin headers on the NP-34
+* LaunchPads are development boards, for NP-34 firmware flashing, we are using the programming side of the LaunchPads
+* Disconnect the MCU side from the programming side of the LaunchPad by removing the connecting jumper caps
+* Locate the 4 connecting points (Ground, Vcc, Test, Reset) and run dupont wires between LaunchPad (programmer side) and NP-34
+
+```
+                        +---------------------------+
+                        |  ...Display.............  |
+  LaunchPad  NP-34      |                           |
+  VCC    to  VCC   (+)  |    o o R  /      \        |
+  GND    to  GND   (G)  |    o o T | CR2032 |       |
+  RESET  to  RESET (R)  | Rx o o +  \      /        |
+  TEST   to  TEST  (T)  | Tx o o G                  |
+
+```
+
+* google "ti msp flasher" to locate software
+* download and install "MSPFLASHER", from TI
+* after installation, it should reside in C:\ti\MSPFlasher_1.3.20\MSP430Flasher.exe
+* ex. to flash version 01 firmware use the following command
+* C:\ti\MSPFlasher_1.3.20\MSP430Flasher.exe -n MSP430G2X55 -w np34-01.hex -j fast -z [VCC]
+
+**Firmware update using USB-TTL dongles**
+* use at own risk, there is a chance to brick your unit
+* there may be other opensource software that could work w/ the MSP430G2955
+* google "TI BSL Scripter" to locate software
+* download "BSL Scripter", from TI
+* follow instruction to install, need to use the legacy BSLDEMO.EXE
+* after installation, it should reside in C:\ti\BSL-Scripter\BSLDEMO.exe
+* also requires a USB-TTL dongle, and it must have DTR RTS lines
+* tested working are the ftdi, cp210x, ch34x variety
+* connect USB-TTL dongle and NP-34 w/ 6 dupont wires, you may also need header pins
+
+```
+  Dongle   NP-34        +---------------------------+
+  RX    to BSL  (Tx)    |  ...Display.............  |
+  TX    to BSL  (Rx)    |                           |
+  3.3V  to VCC   (+)    |    o o R  /      \        |
+  GND   to GND   (G)    |    o o T | CR2032 |       |
+  DTR   to RESET (R)    | Rx o o +  \      /        |
+  RTS   to TEST  (T)    | Tx o o G                  |
+```
+
+**Normal firmware flashing procedure using USB-TTL dongle**
+* for normal upgrade, you need the current version firmware file and password file of the last version
+* ex. to flash version 01 firmware use the following command
+* C:\ti\BSL-Scripter\BSLDEMO.exe -tUSB serial -cCOM? -pPASS-00.txt -m1 +aepvr np34-01.txt
+* COM? port depends on your own system setup and dongle
+* if you cannot supply the correct previous version PASS-??.txt as password, flashing will fail
+* previous version should be the version of firmware currently reside in your NP-34 unit
+* normal firmware flashing w/ password will maintain your NP-34 unit w/ factory calibrated timing
+
+**Force firmware flashing procedure using USB-TTL dongle**
+* used to recovered when you bricked your NP-34 unit, or you can't provide corrent password file of current firmware
+* ex. to flash version 01 firmware use the following command
+* C:\ti\BSL-Scripter\BSLDEMO.exe -tUSB serial -cCOM? -m1 +epvr np34-01np.txt
+* force firmware flashing w/o password will replace your NP-34 unit w/ non-optimal generic timing
 
 
-changes
+------------------------------------------------------------------
 
-250623 add greetings / secret message
-250622 re-order buttons for power-up setup
-250620 timeout selectable, 2 min or 30 min
-       allow 1 more cycle for decimal point to increase brightness
-       postphone flash to ram loading to after 1st key hit upon startup
-250521 align timeout to 60 secs
-250522 'h' key toggles hint display, unit startup shows rom model
-250528 introduce full_hint() to show setup information
-250601 show_hint() for briefly showing rom model and slide switch change
-250603 timeout now about 120 secs
 
-September 2021, cc
-
-. based on TI msp430g2744 mcu, 32kB flash, 1kB ram
-. based on work from Eric Smith's nonpariel
-. emualtes spice core
-. this is a hobby project not suitable for any use.
-. please observe same GPL licensing terms as the original Nonpariel package
-. notice from orignal Nonpareil package
-
-todo (done)
-. brightness control via + - keys
-. assign double press keys to save registers to flash
+part of NP-34's code were derived from Nonpareil, please observe Nonpareil license
 
 Copyright 1995, 2003, 2004, 2005 Eric L. Smith <eric@brouhaha.com>
 
@@ -61,10 +158,74 @@ You should have received a copy of the GNU General Public License
 along with this program (in the file "COPYING"); if not, write to the
 Free Software Foundation, Inc., 59 Temple Place - Suite 330, Boston,
 MA 02111, USA.
+
+--------
+
+### Hardware
+
+**Parts list**
+* msp430g2955
+* 2x CL25011AH LED Module
+* 32× SMT Tactile Button 6x3mm
+* 1x CR2032 SMD/TH battery holder
+* 1x 47k resistor
+* 1x 100nF (104) capacitor (optional)
+
+**Schematic**
+```
+    * runs off 3V button cell
+
+          MSP430G2955
+       -----------------    
+      |                 |  
+      |              RST|---[ 47k ]-----VCC  
+      |         AVCC+VCC|---------------VCC
+      |                 | 
+      |     digit 0 P1.0|--\
+      |     digit 1 P1.1|--\       digits bus (11), D10 shows negative sign only
+      |     digit 2 P1.2|-----//--+---------+--------------------+
+      |     digit 3 P1.3|--/      |         ~  D10, sign led     ~ D0-D9, 2 x 5 digit LED module
+      |     digit 4 P1.4|--/      |         |                    |
+      |     digit 5 P1.5|--/      |         +      +-----------+ +-----------+
+      |     digit 6 P1.6|--/      |        /_\     | % % % % % | | % % % % % |--+
+      |     digit 7 P1.7|--/      ~         |      +-----------+ +-----------+  |
+      |     digit 8 P2.4|--/      |                                             |
+      |     digit 9 P2.5|--/      | digits bus x 3 scan lines                   |
+      |    digit 10 P2.6|--/      +-----+-----+---/ ~~ /--+-----+-----+-----+   |
+      |                 |     _=_ | _=_ | _=_ | _/ ~~ /=_ | _=_ | _=_ | _=_ |   |
+      |      scan X P4.0|-----o o-+-o o-+-o o-+-/ ~~ /o o-+-o o-+-o o-+-o o-+   |
+      |      scan Y P4.1|-----o o-+-o o-+-o o-+/ ~~ /-o o-+-o o-+-o o-+-o o-+   |
+      |      scan Z P4.2|-----o o-+-o o-+-o o-/ ~~ /+-o o-+-o o-+-o o-+-o o-+   |
+      |                 |                                                       ~
+      |                 |      (tactile buttons)                                |
+      |                 |                                                       |
+      |  segment a  P3.0|-------------------------------------------------------|
+      |  segment b  P3.1|-------------------------------------------------------|
+      |  segment c  P3.2|-------------------------------------------------------|
+      |  segment d  P3.3|-------------------------------------------------------|
+      |  segment e  P3.4|-------------------------------------------------------|
+      |  segment f  P3.5|-------------------------------------------------------|
+      |  segment g  P3.6|-------------------------------------------------------|
+      |  segment h  P3.7|-------------------------------------------------------|
+      |                 | 
+      |         AVSS+VSS|--+
+      +-----------------+  |
+                          _|_
+                          ///
+
+```
+
+sed -n '/^sed/q;p' np34.c
 */
 
 /*
-auto-sleep does not work for 37E and 38C ROM
+auto-sleep does not work for 37E and 38C ROM?? verify
+todo/requests
+. review PSE or R/S on fast mode, should pause more?
+. provide setup option to allow for no timeout - rejected
+. instead of automatically do from_flash(), could have a key-sequence to re-load
+
+
 */
 
 //#define C_SPICE
@@ -91,6 +252,8 @@ BCSCTL1 = CALBC1_##x##MHZ;	\
 DCOCTL  = CALDCO_##x##MHZ;
 
 #define __use_cal_clk(x)	___use_cal_clk(x)
+
+const char _ver[] = "00";
 //
 
 //#define DEBUG_STEP
@@ -475,6 +638,7 @@ static const uint8_t key_map_3x[] = {
 // virgin state signature, put it in 0xfc00, power on will check and initialize RAMS
 char __attribute__ ((section(".rodata_factory"))) factory[] = "FACTORY";
 char __attribute__ ((section(".rodata_greetings"))) greetings[] = "THANK?YOU?";
+uint16_t __attribute__ ((section(".rodata_noerase"))) noerase = 0x0000;
 
 //#define __USE_RAM	32		// our highest model 33c has 32 units
 #define __USE_RAM	64			// 34c now uses 64 units
@@ -511,6 +675,7 @@ struct ROM {
 */
 const struct ROM _rom[] = {
 #ifdef G2955
+    // also --section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080
   { rom_21, rom_21_ex, 0, 0, key_map_21, 0, "21?", "DEGRAD", 0, 2, 0, },
   { rom_22, rom_22_ex, 0, 0, key_map_2x, 0xf2, "22?", "BGNEND", 16, 2, 0, },
   { rom_25, rom_25_ex, 0, 0, key_map_2x, 0xf3, "25?", "PGMRUN", 16, 2, 0, },
@@ -522,6 +687,8 @@ const struct ROM _rom[] = {
   { rom_34c, rom_34c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfa, "34C", "PGMRUN", 64, 4, 1, },
   { rom_37e, rom_37e_ex, rom_1820_2122, rom_1820_2122_ex, key_map_3x, 0, "37E", "BGNEND", 0, 2, 1, },
   { rom_38c, rom_38c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfc, "38C", "DMYMDY", 48, 2, 1, },
+  /*
+  */
 #else
   // include some of the above roms as G2774 won't fit all
   { rom_33c, rom_33c_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf9, "33C", "PGMRUN", 32, 2, 1, },
@@ -701,7 +868,7 @@ void sleep() {
 }
 
 
-void full_hint() {
+void xfull_hint() {
     // ..........
     // 34c SLOW H
     // FAST 2 34c
@@ -734,13 +901,15 @@ void show_hint(const char *p) {
     }//if
 }
 
-void xfull_hint() {
+void full_hint() {
     // ..........
-    //    2 F 34c
-    //    L S 34c
+    // 00 F 2 34c
+    // 00 S L 34c
     show_hint(_rom[_state&ST_ROM].model);
-    _msg_buf[5] = _opt&OPT_HW_SLOW ? 'S' : 'F';
-    _msg_buf[3] = _opt&OPT_LONG_TIMEOUT ? 'L' : '2';
+    _msg_buf[0] = _ver[0];
+    _msg_buf[1] = _ver[1];
+    _msg_buf[3] = _opt&OPT_HW_SLOW ? 'S' : 'F';
+    _msg_buf[5] = _opt&OPT_LONG_TIMEOUT ? 'L' : '2';
 }
 
 #define TIMEOUT	        (120*60/48)      // 250521 align timeout to 60 secs, now 120 secs
@@ -842,7 +1011,8 @@ int main() {
             __delay_cycles(MHZ*125);
         }//for
         //___________ erase signature
-        char *flash = (char*) 0x1040;
+        //char *flash = (char*) 0x1040;
+        char *flash = (char*) factory;
         FCTL1 = FWKEY + ERASE;
         FCTL3 = FWKEY;
         *flash = 0x00;
@@ -1149,7 +1319,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 */
 						if (_key == 11) {	// '.' show greetings
                             const char allow[] = "0?12ABC3DEF4GHI5JKL6MNO7PQRS8TUV9WXYZ:";
-							_clicks = 0;
+							_clicks = (uint8_t) noerase;
                             _state &= ~ST_KEY_PRESSED;
                             _opt |= OPT_HW_TEST;
                             char *p = greetings;
