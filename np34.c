@@ -27,10 +27,17 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * [R/S] starts editing and advances digit position
 * [0]..[9] to enter digits and letters like telephone keypad
 * any other key dismiss greeting mode
+* [R/S]+[ON] to show current programming password
+* [R/S] cycles to next non 0xff location + value
+* any other key to dismiss
 
 **Compile w/ (example only, substitute w/ your setup path)**
 
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
+
+### Changes included in firmware 01
+**250722** add expose programming password function
+**250722** fix initial greetings
 
 ### Changes included in firmware 00
 **250714** add 2 digit firmware version _ver
@@ -43,7 +50,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 **250601** show_hint() for briefly showing rom model and slide switch change
 **250603** timeout now about 120 secs
 
-### September 2021, orginal notes
+### September 2021, original notes
 * based on TI msp430g2744 mcu, 32kB flash, 1kB ram, replaced w/ g2955 in 2025
 * based on work from Eric Smith's nonpareil
 * emualtes spice core
@@ -56,6 +63,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * firmware flashing can be done via SBW (Spy-By-Wire) or BSL (BootStrap Loader) mechanisms
 * SBW requires more expensive hardware (TI LaunchPads), is quicker and more secure
 * BSL requires less expensive headware (USB-TTL dongles), is slower and less secure
+* **there may be / are other ways to flash firmware on the MSP430 MCUs, I am only mentioning those that I am familiar with**
 
 ```
   +---------------------------+
@@ -81,6 +89,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * LaunchPads are development boards, for NP-34 firmware flashing, we are using the programming side of the LaunchPads
 * Disconnect the MCU side from the programming side of the LaunchPad by removing the connecting jumper caps
 * Locate the 4 connecting points (Ground, Vcc, Test, Reset) and run dupont wires between LaunchPad (programmer side) and NP-34
+* LaunchPad RESET and TEST pins are also called SBWTDIO (RESET) and SBWTCLK (TEST) pin
 
 ```
                         +---------------------------+
@@ -135,6 +144,22 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * C:\ti\BSL-Scripter\BSLDEMO.exe -tUSB serial -cCOM? -m1 +epvr np34-01np.txt
 * force firmware flashing w/o password will replace your NP-34 unit w/ non-optimal generic timing
 
+**Password used for BSL programming**
+* the MSP430 MCU used in NP-34 has IP protection and can only be programmed with a 32 byte password
+* the password is actually the current programmed interrupt vector table
+* to upgrade from one firmware version to another, you can supply the PASS-??.txt from the last (or current) version of firmware
+* since firmware 01, the [R/S]+[ON] key wll show the current programming password, and you can create a correct password file PASS.txt to be used for BSL programming
+* an address + value pair will be shown like so "FFE4 76E5", [R/S] key will cycle to the next pair
+* values between address 0xffe0 to 0xffff (aka interrupt vector table) is need as password, no show address slots are valued as FFFF
+* use these information to create a PASS.txt file and used to update firmware via BSL
+* example: [R/S]+[ON] functions shows "FFE4 76E5", "FFF2 8EE2" and "FFFE 08C9", your should create your a PASS.txt file like
+
+```
+@ffe0
+FF FF FF FF 76 E5 FF FF FF FF FF FF FF FF FF FF
+FF FF 8E E2 FF FF FF FF FF FF FF FF FF FF 08 C9
+q
+```
 
 ------------------------------------------------------------------
 
@@ -166,7 +191,7 @@ MA 02111, USA.
 **Parts list**
 * msp430g2955
 * 2x CL25011AH LED Module
-* 32× SMT Tactile Button 6x3mm
+* 32× Tactile Button 6x3mm
 * 1x CR2032 SMD/TH battery holder
 * 1x 47k resistor
 * 1x 100nF (104) capacitor (optional)
@@ -491,6 +516,8 @@ keys layout
 #define KEYR_CLR			17
 #define KEYR_PLUS			1
 #define KEYR_MINUS		    37
+#define KEYR_ZERO	        10
+#define KEYR_DOT            11
 #define KEYR_RS	            42
 
 /*
@@ -1016,12 +1043,18 @@ int main() {
         FCTL1 = FWKEY + ERASE;
         FCTL3 = FWKEY;
         *flash = 0x00;
+
+        FCTL1 = FWKEY+WRT; 
+        flash = (char*) greetings;
+        strcpy(greetings, "THANK?YOU?");
+        FCTL1 = FWKEY;
+        FCTL3 = FWKEY+LOCK; 
         _state &= ~ST_ROM;
     }//if
 
 	_opt = OPT_HW_TEST + OPT_ALPHA_MSG;		// enter setup, default to rom 0 (HP34C)
 	_key = KEYR_G;
-    _state = 0;
+    _state = 8;
 	while (_opt&OPT_HW_TEST) {
         full_hint();
         _opt |= OPT_ALPHA_MSG;
@@ -1207,7 +1240,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
                     //_opt |= OPT_ALPHA_MSG;
 					//_clicks = 5;
 					while (_clicks) {
-						if (_key == 10) {   // '0'
+						if (_key == KEYR_ZERO) {   // '0'
                             while (_key) __asm("  nop");
                             WDTCTL = 0;		// s/w reset when '0' pressed to wakeup
                         }//if
@@ -1317,7 +1350,7 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 	     5, 6, 7,41,
 	     9,10,11,42,
 */
-						if (_key == 11) {	// '.' show greetings
+						if (_key == KEYR_DOT) {	// '.' show greetings
                             const char allow[] = "0?12ABC3DEF4GHI5JKL6MNO7PQRS8TUV9WXYZ:";
 							_clicks = (uint8_t) noerase;
                             _state &= ~ST_KEY_PRESSED;
@@ -1378,6 +1411,37 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
                             }//if
                             _opt &= ~(OPT_ALPHA_MSG|OPT_HW_TEST|OPT_WRITE_GREETINGS);
                             _blink = 0;
+                            _key = KEYR_CLR;
+                            break;
+                        }//if
+
+						if (_key == KEYR_RS) {	// 'R/S' show password
+                            uint16_t *pass = (uint16_t*) 0xffe0;
+                            uint8_t idx = 0;
+                            _clicks = 0;
+                            while (1) {
+                                while (_key) __asm("  nop");
+                                _opt |= OPT_ALPHA_MSG;
+                                if (*(pass+idx) != 0xffff) {
+                                    uint16_t val = *(pass+idx);
+                                    _msg_buf[4] = '?';
+                                    _msg_buf[3] = hex((idx&0x07)<<1);
+                                    _msg_buf[2] = 'E' + (idx>>3);
+                                    _msg_buf[1] = 'F';
+                                    _msg_buf[0] = 'F';
+
+                                    _msg_buf[9] = '?';
+                                    _msg_buf[6] = hex(val&0x0f); val >>= 4;
+                                    _msg_buf[5] = hex(val&0x0f); val >>= 4;
+                                    _msg_buf[8] = hex(val&0x0f); val >>= 4;
+                                    _msg_buf[7] = hex(val&0x0f);
+                                    //LPM0;
+                                    while (!_key) __asm("  nop");
+                                    if (_key != KEYR_RS) break;
+                                }//if
+                                idx++;
+                                idx &= 0x0f;
+                            }//while
                             _key = KEYR_CLR;
                             break;
                         }//if

@@ -22,10 +22,17 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * [R/S] starts editing and advances digit position
 * [0]..[9] to enter digits and letters like telephone keypad
 * any other key dismiss greeting mode
+* [R/S]+[ON] to show current programming password
+* [R/S] cycles to next non 0xff location + value
+* any other key to dismiss
 
 **Compile w/ (example only, substitute w/ your setup path)**
 
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
+
+### Changes included in firmware 01
+**250722** add expose programming password function
+**250722** fix initial greetings
 
 ### Changes included in firmware 00
 **250714** add 2 digit firmware version _ver
@@ -38,7 +45,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 **250601** show_hint() for briefly showing rom model and slide switch change
 **250603** timeout now about 120 secs
 
-### September 2021, orginal notes
+### September 2021, original notes
 * based on TI msp430g2744 mcu, 32kB flash, 1kB ram, replaced w/ g2955 in 2025
 * based on work from Eric Smith's nonpareil
 * emualtes spice core
@@ -51,6 +58,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * firmware flashing can be done via SBW (Spy-By-Wire) or BSL (BootStrap Loader) mechanisms
 * SBW requires more expensive hardware (TI LaunchPads), is quicker and more secure
 * BSL requires less expensive headware (USB-TTL dongles), is slower and less secure
+* **there may be / are other ways to flash firmware on the MSP430 MCUs, I am only mentioning those that I am familiar with**
 
 ```
   +---------------------------+
@@ -66,7 +74,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 ```
 
 * each firmware release contains 4 files, example for version 00
-  `ex. np34-00.hex (for SBW), np34-00.txt, PASS-000txt and np34-00np.txt (for BSL)`
+  `ex. np34-00.hex (for SBW), np34-00.txt, PASS-00.txt and np34-00np.txt (for BSL)`
 * firmware files reside in **firmware** folder in source tree
 
 **Firmware flashing procedure using TI LaunchPad**
@@ -76,6 +84,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * LaunchPads are development boards, for NP-34 firmware flashing, we are using the programming side of the LaunchPads
 * Disconnect the MCU side from the programming side of the LaunchPad by removing the connecting jumper caps
 * Locate the 4 connecting points (Ground, Vcc, Test, Reset) and run dupont wires between LaunchPad (programmer side) and NP-34
+* LaunchPad RESET and TEST pins are also called SBWTDIO (RESET) and SBWTCLK (TEST) pin
 
 ```
                         +---------------------------+
@@ -130,6 +139,22 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 * C:\ti\BSL-Scripter\BSLDEMO.exe -tUSB serial -cCOM? -m1 +epvr np34-01np.txt
 * force firmware flashing w/o password will replace your NP-34 unit w/ non-optimal generic timing
 
+**Password used for BSL programming**
+* the MSP430 MCU used in NP-34 has IP protection and can only be programmed with a 32 byte password
+* the password is actually the current programmed interrupt vector table
+* to upgrade from one firmware version to another, you can supply the PASS-??.txt from the last (or current) version of firmware
+* since firmware 01, the [R/S]+[ON] key wll show the current programming password, and you can create a correct password file PASS.txt to be used for BSL programming
+* an address + value pair will be shown like so "FFE4 76E5", [R/S] key will cycle to the next pair
+* values between address 0xffe0 to 0xffff (aka interrupt vector table) is need as password, no show address slots are valued as FFFF
+* use these information to create a PASS.txt file and used to update firmware via BSL
+* example: [R/S]+[ON] functions shows "FFE4 76E5", "FFF2 8EE2" and "FFFE 08C9", your should create your a PASS.txt file like
+
+```
+@ffe0
+FF FF FF FF 76 E5 FF FF FF FF FF FF FF FF FF FF
+FF FF 8E E2 FF FF FF FF FF FF FF FF FF FF 08 C9
+q
+```
 
 ------------------------------------------------------------------
 
@@ -161,7 +186,7 @@ MA 02111, USA.
 **Parts list**
 * msp430g2955
 * 2x CL25011AH LED Module
-* 32× SMT Tactile Button 6x3mm
+* 32× Tactile Button 6x3mm
 * 1x CR2032 SMD/TH battery holder
 * 1x 47k resistor
 * 1x 100nF (104) capacitor (optional)
