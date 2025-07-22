@@ -278,7 +278,7 @@ DCOCTL  = CALDCO_##x##MHZ;
 
 #define __use_cal_clk(x)	___use_cal_clk(x)
 
-const char _ver[] = "00";
+const char _ver[] = "01";
 //
 
 //#define DEBUG_STEP
