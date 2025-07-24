@@ -1,3 +1,4 @@
+
 ## NP-34 Calculator Emulator
 Nonpareil Physical (NP) is an standalone calculator microcode emulator
 
@@ -31,6 +32,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
 
 ### Changes included in firmware 01
+**250724** fix 29C startup fix 2 decimal display
 **250722** add expose programming password function
 **250722** fix initial greetings
 
@@ -90,10 +92,10 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
                         +---------------------------+
                         |  ...Display.............  |
   LaunchPad  NP-34      |                           |
-  VCC    to  VCC   (+)  |    o o R  /      \        |
-  GND    to  GND   (G)  |    o o T | CR2032 |       |
-  RESET  to  RESET (R)  | Rx o o +  \      /        |
-  TEST   to  TEST  (T)  | Tx o o G                  |
+  RESET  to  RESET (R)  |    o o R  /      \        |
+  TEST   to  TEST  (T)  |    o o T | CR2032 |       |
+  VCC    to  VCC   (+)  | Rx o o +  \      /        |
+  GND    to  GND   (G)  | Tx o o G                  |
 
 ```
 

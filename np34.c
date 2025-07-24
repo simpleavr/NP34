@@ -36,6 +36,7 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
 
 ### Changes included in firmware 01
+**250724** fix 29C startup fix 2 decimal display
 **250722** add expose programming password function
 **250722** fix initial greetings
 
@@ -95,10 +96,10 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
                         +---------------------------+
                         |  ...Display.............  |
   LaunchPad  NP-34      |                           |
-  VCC    to  VCC   (+)  |    o o R  /      \        |
-  GND    to  GND   (G)  |    o o T | CR2032 |       |
-  RESET  to  RESET (R)  | Rx o o +  \      /        |
-  TEST   to  TEST  (T)  | Tx o o G                  |
+  RESET  to  RESET (R)  |    o o R  /      \        |
+  TEST   to  TEST  (T)  |    o o T | CR2032 |       |
+  VCC    to  VCC   (+)  | Rx o o +  \      /        |
+  GND    to  GND   (G)  | Tx o o G                  |
 
 ```
 
@@ -240,7 +241,7 @@ MA 02111, USA.
 
 ```
 
-sed -n '/^sed/q;p' np34.c
+tail -n +5 $prg.c | sed -n '/^tail/q;p' > README.md");
 */
 
 /*
@@ -774,6 +775,7 @@ static volatile uint8_t _blink=0;
 //________________________________________________________________________________
 void from_flash() {
 	uint8_t rom = _state&ST_ROM;
+    //if (rom != 4 && _rom[rom].flash) {
     if (_rom[rom].flash) {
         char *ram = (char*) act_reg->ram;
         char *flash = (char *) ((uint16_t) _rom[rom].flash << 8);
@@ -1487,13 +1489,13 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
 				else {
 					//if (session_key_map[_key]) woodstock_press_key(session_key_map[_key]);
 					sim_check_key(_key);
-                    if (initialized == 1) warm_load = 100;
 				}//else
 				_state &= ~ST_KEY_PRESSED;
 			}//if
 			else if (_state & ST_KEY_RELEASED) {
 				woodstock_release_key();
 				_state &= ~ST_KEY_RELEASED;
+                if (initialized == 1) warm_load = 100;
 			}//if
 		}//if
         if (!initialized) initialized++;
@@ -1718,7 +1720,11 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 			_data >>= 1;
 		}//while
 		segs += _brightness;
-		TA0CCR0 += MHZ * segs * 50;
+        // average lighted segment of 6, stay on 8 * 6 * 50 = 2400 cycles
+        // with MCU running at 8Mhz
+        // for 5 digits on refresh rate is 8000000 / (5 * 2400) = 8000/12 = 600Hz
+        // for 10 digits it's about 300Hz, it is actually lower as we have key scanning and extra decimal brightening cycles
+		TA0CCR0 += MHZ * segs * 50;     // to increase refresh rate, reduce value from 50 to lower
 	}//else
 
     if (_decimal_stay) {
