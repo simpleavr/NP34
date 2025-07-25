@@ -31,7 +31,12 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
 
+**Most recent firmware release is a rolling release, check date of firmware and date of feature changes**
+
 ### Changes included in firmware 01
+**250725** increase LED refresh rate, fix brightness adjustments
+**250724** save to flash now won't toggle PGM/RUN switch
+**250724** add save to flash for 37E
 **250724** fix 29C startup fix 2 decimal display
 **250722** add expose programming password function
 **250722** fix initial greetings

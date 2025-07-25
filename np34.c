@@ -35,7 +35,12 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 
 `/usr/local/ti/msp430-gcc/bin/msp430-elf-gcc -D EMBEDDED -Wall -I /usr/local/ti/msp430-gcc/bin/../include -mmcu=msp430g2955 -Os -g -ffunction-sections -fdata-sections -fno-inline-small-functions -Wl,--relax -Wl,--gc-sections,--section-start=.rodata_factory=0x0f040,--section-start=.rodata_greetings=0x0f080,--section-start=.rodata_noerase=0x0ffde -L /usr/local/ti/msp430-gcc/bin/../include -T msp430g2955.ld -c -o np34.o np34.c`
 
+**Most recent firmware release is a rolling release, check date of firmware and date of feature changes**
+
 ### Changes included in firmware 01
+**250725** increase LED refresh rate, fix brightness adjustments
+**250724** save to flash now won't toggle PGM/RUN switch
+**250724** add save to flash for 37E
 **250724** fix 29C startup fix 2 decimal display
 **250722** add expose programming password function
 **250722** fix initial greetings
@@ -713,7 +718,7 @@ const struct ROM _rom[] = {
   { rom_32e, rom_32e_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xf8, "32E", "", 32, 4, 1, },
   { rom_33c, rom_33c_ex, rom_1820_2105, rom_1820_2105_ex, key_map_3x, 0xf9, "33C", "PGMRUN", 32, 2, 1, },
   { rom_34c, rom_34c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfa, "34C", "PGMRUN", 64, 4, 1, },
-  { rom_37e, rom_37e_ex, rom_1820_2122, rom_1820_2122_ex, key_map_3x, 0, "37E", "BGNEND", 0, 2, 1, },
+  { rom_37e, rom_37e_ex, rom_1820_2122, rom_1820_2122_ex, key_map_3x, 0xf1, "37E", "BGNEND", 32, 2, 1, },
   { rom_38c, rom_38c_ex, rom_1820_2162, rom_1820_2162_ex, key_map_3x, 0xfc, "38C", "DMYMDY", 48, 2, 1, },
   /*
   */
@@ -1082,12 +1087,12 @@ int main() {
             default:
 				break;
 			case KEYR_MINUS:
-				_brightness++;
-				_brightness &= 0x07;
+				_brightness--;
+				_brightness &= 0x03;
 				break;
 			case KEYR_PLUS:
-				_brightness--;
-				_brightness &= 0x07;
+				_brightness++;
+				_brightness &= 0x03;
 				break;
 		}//switch
 	}//while
@@ -1479,17 +1484,21 @@ c+7gxc6hng+x0v7hd7hEx7hd6v82.5-c+6\
                     strcpy(_msg_buf, "?MEM?SAVED");
                     _opt |= OPT_ALPHA_MSG;
                     _clicks = 40;
-                    //continue;
-				}//if
-				if (_key == KEYR_PGM_RUN) {
                     if (*_rom[_state&ST_ROM].slide)
                         woodstock_set_ext_flag (3, _pgm_run ^= 1);		// pgm-run toggle
-                    if (initialized) show_hint(_rom[_state&ST_ROM].slide + _pgm_run*3);
+                    //continue;
 				}//if
-				else {
-					//if (session_key_map[_key]) woodstock_press_key(session_key_map[_key]);
-					sim_check_key(_key);
-				}//else
+                else {
+                    if (_key == KEYR_PGM_RUN) {
+                        if (*_rom[_state&ST_ROM].slide)
+                            woodstock_set_ext_flag (3, _pgm_run ^= 1);		// pgm-run toggle
+                        if (initialized) show_hint(_rom[_state&ST_ROM].slide + _pgm_run*3);
+                    }//if
+                    else {
+                        //if (session_key_map[_key]) woodstock_press_key(session_key_map[_key]);
+                        sim_check_key(_key);
+                    }//else
+                }//else
 				_state &= ~ST_KEY_PRESSED;
 			}//if
 			else if (_state & ST_KEY_RELEASED) {
@@ -1719,12 +1728,13 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 			if (_data&1) segs++;
 			_data >>= 1;
 		}//while
-		segs += _brightness;
+		//segs += _brightness;
+		segs += 2;
         // average lighted segment of 6, stay on 8 * 6 * 50 = 2400 cycles
         // with MCU running at 8Mhz
         // for 5 digits on refresh rate is 8000000 / (5 * 2400) = 8000/12 = 600Hz
         // for 10 digits it's about 300Hz, it is actually lower as we have key scanning and extra decimal brightening cycles
-		TA0CCR0 += MHZ * segs * 50;     // to increase refresh rate, reduce value from 50 to lower
+		TA0CCR0 += MHZ * segs * 25;     // to increase refresh rate, reduce value from 50 to lower
 	}//else
 
     if (_decimal_stay) {
@@ -1735,12 +1745,13 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 	//______ prepare for next digit
 	if (_digit>=12) {
 		_digit = 0;
-		TA0CCR0 += MHZ * 50;	// for quick turn-around
+		TA0CCR0 += MHZ * 25;	// for quick turn-around
 	}//if
 	else {
 		_digit++;
 		// less frequent key scanning for led brightness
-		if (_digit==12 && _keyscan++&0x03) _digit = 0;
+		//if (_digit==12 && _keyscan++&0x03) _digit = 0;
+		if (_digit==12 && _keyscan++%(1<<_brightness)) _digit = 0;
 	}//else
 
 	if (_digit == 12) {
@@ -1772,7 +1783,6 @@ void __interrupt_vec(TIMER0_A0_VECTOR) Timer_A (void) {
 	}//if
 	//
 }
-
 //________________________________________________________________________________
 void __interrupt_vec(PORT1_VECTOR) PORT1_ISR(void) {
 	P1IFG &= ~BIT0;
