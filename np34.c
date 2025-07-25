@@ -38,23 +38,23 @@ Nonpareil Physical (NP) is an standalone calculator microcode emulator
 **Most recent firmware release is a rolling release, check date of firmware and date of feature changes**
 
 ### Changes included in firmware 01
-**250725** increase LED refresh rate, fix brightness adjustments
-**250724** save to flash now won't toggle PGM/RUN switch
-**250724** add save to flash for 37E
-**250724** fix 29C startup fix 2 decimal display
-**250722** add expose programming password function
-**250722** fix initial greetings
+**250725** increase LED refresh rate, fix brightness adjustments<BR>
+**250724** save to flash now won't toggle PGM/RUN switch<BR>
+**250724** add save to flash for 37E<BR>
+**250724** fix 29C startup fix 2 decimal display<BR>
+**250722** add expose programming password function<BR>
+**250722** fix initial greetings<BR>
 
 ### Changes included in firmware 00
-**250714** add 2 digit firmware version _ver
-**250623** add greetings / secret message
-**250622** re-order buttons for power-up setup
-**250620** timeout selectable, 2 min or 30 min, allow 1 more cycle for decimal point to increase brightness, postphone flash to ram loading to after 1st key hit upon startup
-**250521** align timeout to 60 secs
-**250522** 'h' key toggles hint display, unit startup shows rom model
-**250528** introduce full_hint() to show setup information
-**250601** show_hint() for briefly showing rom model and slide switch change
-**250603** timeout now about 120 secs
+**250714** add 2 digit firmware version _ver<BR>
+**250623** add greetings / secret message<BR>
+**250622** re-order buttons for power-up setup<BR>
+**250620** timeout selectable, 2 min or 30 min, allow 1 more cycle for decimal point to increase brightness, postphone flash to ram loading to after 1st key hit upon startup<BR>
+**250521** align timeout to 60 secs<BR>
+**250522** 'h' key toggles hint display, unit startup shows rom model<BR>
+**250528** introduce full_hint() to show setup information<BR>
+**250601** show_hint() for briefly showing rom model and slide switch change<BR>
+**250603** timeout now about 120 secs<BR>
 
 ### September 2021, original notes
 * based on TI msp430g2744 mcu, 32kB flash, 1kB ram, replaced w/ g2955 in 2025
